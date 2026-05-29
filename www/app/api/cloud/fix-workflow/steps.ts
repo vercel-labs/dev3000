@@ -64,7 +64,8 @@ const AI_GATEWAY_OIDC_EXPIRATION_BUFFER_MS = 10 * 60 * 1000
 const AI_GATEWAY_OIDC_MIN_USABLE_MS = 60 * 1000
 const DEEPSEC_PROCESS_TIMEOUT_MS = 25 * 60 * 1000
 const DEEPSEC_COMMAND_TIMEOUT_MS = 5 * 60 * 1000
-const DEEPSEC_PROCESS_INNER_COMMAND = "corepack pnpm deepsec process --limit 25 --concurrency 2 --batch-size 3"
+const DEEPSEC_PROCESS_INNER_COMMAND =
+  "corepack pnpm deepsec process --agent claude --max-turns 32 --limit 12 --concurrency 2 --batch-size 2"
 const DEEPSEC_PROCESS_COMMAND = `cd .deepsec && ${DEEPSEC_PROCESS_INNER_COMMAND}`
 const DEEPSEC_PROCESS_AUTH_RESTART_LIMIT = 4
 const DEEPSEC_PROCESS_FAILURE_RESTART_LIMIT = 2
@@ -1483,6 +1484,10 @@ interface ProgressContext {
 const WORKFLOW_SANDBOX_TIMEOUT = "60m" as const
 const PROGRESS_LOG_DELIMITER = "||"
 
+function stripAnsiCodes(value: string): string {
+  return value.replaceAll(String.fromCharCode(27), "").replace(/\[[0-9;]*m/g, "")
+}
+
 function buildProgressLogLine(message: string, timestamp = new Date().toISOString()): string {
   return `${timestamp}${PROGRESS_LOG_DELIMITER}${message}`
 }
@@ -2718,7 +2723,9 @@ export async function initSandboxStep(
   let developmentEnvLoadFailed = false
   const envFetchTokens = getVercelApiTokenCandidates(vercelOidcToken)
 
-  if (projectId && envFetchTokens.length > 0) {
+  if (isDeepsecSecurityScan) {
+    await appendProgressLog(progressContext, "[Sandbox] Skipping development env load for code-only DeepSec scan")
+  } else if (projectId && envFetchTokens.length > 0) {
     try {
       await appendProgressLog(progressContext, "[Sandbox] Loading development environment variables...")
       const params = new URLSearchParams({ target: "development", decrypt: "true", limit: "100" })
@@ -2801,18 +2808,21 @@ export async function initSandboxStep(
     )
   }
 
-  const effectiveNpmToken =
-    npmToken ||
-    projectEnvInput?.NPM_TOKEN ||
-    projectEnvInput?.NODE_AUTH_TOKEN ||
-    developmentEnv.NPM_TOKEN ||
-    developmentEnv.NODE_AUTH_TOKEN ||
-    process.env.NPM_TOKEN ||
-    process.env.NODE_AUTH_TOKEN
-  const mergedProjectEnv = {
-    ...developmentEnv,
-    ...(projectEnvInput || {})
-  }
+  const effectiveNpmToken = isDeepsecSecurityScan
+    ? undefined
+    : npmToken ||
+      projectEnvInput?.NPM_TOKEN ||
+      projectEnvInput?.NODE_AUTH_TOKEN ||
+      developmentEnv.NPM_TOKEN ||
+      developmentEnv.NODE_AUTH_TOKEN ||
+      process.env.NPM_TOKEN ||
+      process.env.NODE_AUTH_TOKEN
+  const mergedProjectEnv = isDeepsecSecurityScan
+    ? {}
+    : {
+        ...developmentEnv,
+        ...(projectEnvInput || {})
+      }
   await appendProgressLog(
     progressContext,
     `[Sandbox] npm auth token ${effectiveNpmToken ? "detected" : "not detected"} for dependency install`
@@ -4386,7 +4396,10 @@ function buildDeepSecEnv(gatewayAuthToken: string, gatewayAuthSource: string): R
   return {
     ...buildSandboxToolchainEnv(),
     ...buildClaudeAiGatewayEnv(gatewayAuthToken, gatewayAuthSource),
-    ...(isOidcAiGatewayAuthSource(gatewayAuthSource) ? {} : { AI_GATEWAY_API_KEY: gatewayAuthToken }),
+    AI_GATEWAY_API_KEY: gatewayAuthToken,
+    ...(isOidcAiGatewayAuthSource(gatewayAuthSource) ? { VERCEL_OIDC_TOKEN: gatewayAuthToken } : {}),
+    ANTHROPIC_AUTH_TOKEN: gatewayAuthToken,
+    ANTHROPIC_BASE_URL: "https://ai-gateway.vercel.sh",
     DEEPSEC_INSIDE_SANDBOX: "1",
     OPENAI_API_KEY: gatewayAuthToken,
     OPENAI_BASE_URL: "https://ai-gateway.vercel.sh/v1",
@@ -4510,6 +4523,18 @@ function buildDeepSecInfoWriterScript(projectRoot: string): string {
     "const authBullets = authCandidates.map((file) => '- Review ' + file + ' for authentication, authorization, request validation, and privileged side effects.').join('\\n') || '- No obvious auth helpers were detected; treat request handlers and server actions as security boundaries.'",
     "const patternBullets = representativeFiles.slice(0, 5).map((file) => '- Check ' + file + ' for project-specific trust boundaries, user-controlled input, external API calls, and secret handling.').join('\\n') || '- Check request entry points for user-controlled input, external API calls, and secret handling.'",
     "const falsePositiveBullets = ['- Generated build output, dependency directories, and local DeepSec state are out of scope.', '- Public static assets and intentionally public read endpoints should not be treated as auth bypasses without a privileged effect.'].join('\\n')",
+    "const defaultIgnorePaths = ['**/.env', '**/.env.*', '**/*.pem', '**/*.key', '**/.deepsec/**', '**/.next/**', '**/node_modules/**', '**/dist/**', '**/build/**', 'app/.well-known/workflow/**']",
+    "const defaultPriorityPaths = ['app/api/', 'src/app/api/', 'pages/api/', 'api/', 'server/', 'src/server/', 'lib/']",
+    "function writeDeepSecConfig(projectDir) {",
+    "  const configPath = path.join(projectDir, 'config.json')",
+    "  let config = {}",
+    "  try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch {}",
+    "  const existingIgnore = Array.isArray(config.ignorePaths) ? config.ignorePaths.filter((item) => typeof item === 'string') : []",
+    "  const existingPriority = Array.isArray(config.priorityPaths) ? config.priorityPaths.filter((item) => typeof item === 'string') : []",
+    "  config.ignorePaths = Array.from(new Set([...existingIgnore, ...defaultIgnorePaths]))",
+    "  if (existingPriority.length === 0) config.priorityPaths = defaultPriorityPaths",
+    "  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\\n')",
+    "}",
     "const contextLines = [",
     "  '# ' + pkg.name",
     "  , ''",
@@ -4535,9 +4560,10 @@ function buildDeepSecInfoWriterScript(projectRoot: string): string {
     "  , falsePositiveBullets",
     "].filter(Boolean)",
     "for (const projectDir of projectDirs) {",
+    "  writeDeepSecConfig(projectDir)",
     "  fs.writeFileSync(path.join(projectDir, 'INFO.md'), contextLines.join('\\n') + '\\n')",
     "}",
-    "process.stdout.write('Wrote INFO.md for ' + projectDirs.length + ' DeepSec project(s)\\n')"
+    "process.stdout.write('Wrote INFO.md and config.json for ' + projectDirs.length + ' DeepSec project(s)\\n')"
   ].join("\n")
 }
 
@@ -5108,10 +5134,21 @@ process.stdout.write(JSON.stringify({
 
   if (parsed.running || parsed.exitCode === null) {
     await updateProgress(params.progressContext, 3, "Processing DeepSec candidates...", params.devUrl)
+    const latestOutputLine = stripAnsiCodes(lastStderr || lastStdout)
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .reverse()
+      .find(Boolean)
     await appendProgressLog(
       params.progressContext,
       `[DeepSec] Process candidates still running (${parsed.elapsedSeconds}s elapsed)`
     )
+    if (latestOutputLine) {
+      await appendProgressLog(
+        params.progressContext,
+        `[DeepSec] Latest output: ${formatClaudeOutputPreview(latestOutputLine, 360)}`
+      )
+    }
     return {
       ...processState,
       done: false,

@@ -28,6 +28,17 @@ const workflowLog = console.log
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES = 50 * 1024
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_PERCENT = 0.2
 
+function stripAnsiCodes(value: string): string {
+  return value.replaceAll(String.fromCharCode(27), "").replace(/\[[0-9;]*m/g, "")
+}
+
+function formatWorkflowErrorPreview(value: string | undefined, maxLength = 1200): string {
+  const normalized = value ? stripAnsiCodes(value).replace(/\s+/g, " ").trim() : ""
+
+  if (!normalized) return ""
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized
+}
+
 type WorkflowReportSummary = Pick<
   import("@/types").WorkflowReport,
   | "clsScore"
@@ -633,6 +644,10 @@ export async function cloudFixWorkflow(params: {
         preparedState
       )
       let completedProcessState: import("./steps").DeepSecProcessPollState | null = null
+      let latestProcessOutput: Pick<
+        import("./steps").DeepSecProcessPollState,
+        "elapsedSeconds" | "lastStderr" | "lastStdout"
+      > | null = null
       for (let pollIndex = 0; pollIndex < 60; pollIndex++) {
         await sleep("30s")
         const nextPollState = await deepSecPollProcess(
@@ -640,13 +655,25 @@ export async function cloudFixWorkflow(params: {
           processState
         )
         processState = nextPollState
+        latestProcessOutput = nextPollState
         if (nextPollState.done) {
           completedProcessState = nextPollState
           break
         }
       }
       if (!completedProcessState) {
-        throw new Error("DeepSec process did not complete within 30 minutes.")
+        const outputPreview = formatWorkflowErrorPreview(
+          latestProcessOutput?.lastStderr || latestProcessOutput?.lastStdout
+        )
+        const elapsedSuffix =
+          typeof latestProcessOutput?.elapsedSeconds === "number"
+            ? ` Last observed elapsed time: ${latestProcessOutput.elapsedSeconds}s.`
+            : ""
+        throw new Error(
+          `DeepSec process did not complete within the 30 minute cloud budget.${elapsedSuffix}${
+            outputPreview ? ` Last DeepSec output: ${outputPreview}` : ""
+          }`
+        )
       }
 
       fixResult = await deepSecFinalize(
