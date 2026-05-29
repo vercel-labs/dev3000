@@ -1,0 +1,26 @@
+www/app/api/cloud/fix-workflow/steps.ts
+  s_5da4393566ec36::t_51b83cb3cb6a72 5138-5141,5146-5151
+  s_5da4393566ec36::t_3542dbc4670680 2726-2728,2811-2825
+  s_5da4393566ec36::t_64a597dbac046f 4526-4537,4563,4566
+  s_5da4393566ec36::t_148966bfdcfb28 1487-1490,5137
+  s_5da4393566ec36::t_9d3c5c910170bd 67-68,4399-4402
+www/app/api/cloud/fix-workflow/workflow.ts
+  s_5da4393566ec36::t_5d22ecfabe3056 35,37-41,647-650,658,665-676
+  s_5da4393566ec36::t_04662cad5b6b62 31-34,36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ef86dcef6e6cd5bff4026e6c5334fcfb7ee7f1c0",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
