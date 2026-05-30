@@ -1,0 +1,35 @@
+www/app/api/cloud/fix-workflow/workflow.ts
+  s_5da4393566ec36::t_75ece37040e63a 1509-1510
+  s_5da4393566ec36::t_f28f6d855154b0 15,24,1508
+www/lib/workflow-report-blob.ts
+  s_5da4393566ec36::t_e18fc50dbc3586 1-17,20-41,43-57,59-68,70-73,77-80
+  s_5da4393566ec36::t_f8e074e04cabc9 74-76
+  s_5da4393566ec36::t_1a796a2a71319a 18-19,42,58,69
+www/app/api/internal/report-blobs/route.ts
+  s_5da4393566ec36::t_f8d0f5d4e87a9c 2-10,12-13,15-19,22-25,31-32,34,40,44-54
+  s_5da4393566ec36::t_5d4672d76291e2 14
+  s_5da4393566ec36::t_c829bc58ed6520 1,11,20-21,26-30,33,35-39,41-43
+www/app/api/cloud/fix-workflow/steps.ts
+  s_5da4393566ec36::t_2cc0adaed0afab 3949,5637,5833
+  s_5da4393566ec36::t_f8e074e04cabc9 32
+  s_5da4393566ec36::t_510f1162ca9429 3950-3951,5638-5639,5834-5835,6563-6564,6809-6810,12031-12032
+  s_5da4393566ec36::t_723f096c6a9162 6562,6808,12030
+www/lib/skill-runner-shell-source.ts
+  s_5da4393566ec36::t_74e449214ddfeb 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a3c35a588f5b9b7ae48b880955c02f9c94ee1d33",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
