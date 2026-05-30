@@ -18,6 +18,10 @@ import { putBlobAndBuildUrl, readBlobJson } from "@/lib/blob-store"
 import { D3K_ASH_RUNTIME_PORT, getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
 import {
+  buildPersistedDeepSecFindingsMarkdown,
+  type DeepSecPersistedFindingsSnapshot
+} from "@/lib/deepsec-partial-report"
+import {
   type DevAgentEarlyExitRule,
   type DevAgentSkillRef,
   getDevAgentModelLabel,
@@ -4033,6 +4037,7 @@ function isCodeOnlyWorkflowType(workflowType?: string): boolean {
 }
 
 type GeneratedMarkdownReport = {
+  findingCount?: number
   markdown: string
   path: string
 }
@@ -4213,6 +4218,171 @@ process.stdout.write(JSON.stringify(null))
     await appendProgressLog(
       progressContext,
       `[DeepSec] Could not parse generated report lookup: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return null
+  }
+}
+
+async function readDeepSecPersistedFindingsMarkdown(
+  sandbox: Sandbox,
+  projectDir?: string,
+  progressContext?: ProgressContext | null
+): Promise<GeneratedMarkdownReport | null> {
+  const projectRoot = getSandboxProjectRoot(projectDir)
+  const script = `
+const fs = require("node:fs")
+const path = require("node:path")
+
+const root = ${JSON.stringify(projectRoot)}
+const dataRoot = path.join(root, ".deepsec", "data")
+const maxFindings = 80
+
+function safeString(value, maxLength) {
+  if (typeof value !== "string") return undefined
+  const normalized = value.replace(/\\r/g, "").trim()
+  return normalized ? normalized.slice(0, maxLength) : undefined
+}
+
+function readJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"))
+  } catch {
+    return null
+  }
+}
+
+function walkJsonFiles(dir, depth = 0) {
+  if (depth > 12) return []
+  let entries
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const files = []
+  for (const entry of entries) {
+    const abs = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...walkJsonFiles(abs, depth + 1))
+    } else if (entry.isFile() && entry.name.endsWith(".json")) {
+      files.push(abs)
+    }
+  }
+  return files
+}
+
+function projectDirectories() {
+  try {
+    return fs.readdirSync(dataRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => ({
+        id: entry.name,
+        filesDir: path.join(dataRoot, entry.name, "files")
+      }))
+  } catch {
+    return []
+  }
+}
+
+const projectDirs = projectDirectories()
+const statusCounts = {}
+const findings = []
+let fileCount = 0
+let findingCount = 0
+
+for (const projectDir of projectDirs) {
+  for (const filePath of walkJsonFiles(projectDir.filesDir)) {
+    const record = readJson(filePath)
+    if (!record || typeof record !== "object") continue
+    fileCount += 1
+
+    const status = typeof record.status === "string" ? record.status : "unknown"
+    statusCounts[status] = (statusCounts[status] || 0) + 1
+
+    const recordFindings = Array.isArray(record.findings) ? record.findings : []
+    findingCount += recordFindings.length
+
+    for (const finding of recordFindings) {
+      if (!finding || typeof finding !== "object") continue
+      if (findings.length >= maxFindings) continue
+
+      findings.push({
+        confidence: safeString(finding.confidence, 80),
+        description: safeString(finding.description, 2200),
+        filePath: safeString(record.filePath, 600) || path.relative(projectDir.filesDir, filePath).replace(/\\.json$/, ""),
+        lineNumbers: Array.isArray(finding.lineNumbers)
+          ? finding.lineNumbers.filter((line) => Number.isFinite(line)).slice(0, 12)
+          : undefined,
+        recommendation: safeString(finding.recommendation, 2200),
+        revalidationVerdict: finding.revalidation && typeof finding.revalidation === "object"
+          ? safeString(finding.revalidation.verdict, 80)
+          : undefined,
+        severity: safeString(finding.severity, 80),
+        title: safeString(finding.title, 240),
+        triagePriority: finding.triage && typeof finding.triage === "object"
+          ? safeString(finding.triage.priority, 80)
+          : undefined,
+        vulnSlug: safeString(finding.vulnSlug, 160)
+      })
+    }
+  }
+}
+
+if (fileCount === 0) {
+  process.stdout.write(JSON.stringify(null))
+  process.exit(0)
+}
+
+process.stdout.write(JSON.stringify({
+  fileCount,
+  findingCount,
+  findings,
+  projectIds: projectDirs.map((projectDir) => projectDir.id),
+  statusCounts,
+  truncated: findingCount > findings.length
+}))
+`
+
+  const result = await runSandboxCommandWithOptions(
+    sandbox,
+    {
+      cmd: "node",
+      args: ["-e", script],
+      env: buildSandboxToolchainEnv()
+    },
+    { timeoutMs: 30000 }
+  )
+
+  if (result.exitCode !== 0) {
+    await appendProgressLog(
+      progressContext,
+      `[DeepSec] Failed to read persisted findings: ${formatClaudeOutputPreview(result.stderr || result.stdout, 360)}`
+    )
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(result.stdout.trim() || "null") as DeepSecPersistedFindingsSnapshot | null
+    if (!parsed) {
+      await appendProgressLog(progressContext, "[DeepSec] No persisted finding records found")
+      return null
+    }
+
+    const markdown = redactSensitiveReportText(buildPersistedDeepSecFindingsMarkdown(parsed))
+    await appendProgressLog(
+      progressContext,
+      `[DeepSec] Persisted finding snapshot found: ${parsed.findingCount} finding(s) across ${parsed.fileCount} file record(s)`
+    )
+    return {
+      findingCount: parsed.findingCount,
+      markdown,
+      path: ".deepsec/data"
+    }
+  } catch (error) {
+    await appendProgressLog(
+      progressContext,
+      `[DeepSec] Could not parse persisted findings: ${error instanceof Error ? error.message : String(error)}`
     )
     return null
   }
@@ -5524,9 +5694,17 @@ export async function deepSecFinalizePartialStep(
     effectiveProjectDir,
     params.progressContext
   )
+  const deepsecPersistedFindingsReport = await readDeepSecPersistedFindingsMarkdown(
+    sandbox,
+    effectiveProjectDir,
+    params.progressContext
+  )
   const statusOutput = transcriptEntries.at(-1)?.stdout.trim() || ""
   const generatedReportMarkdown = buildPartialDeepSecReportMarkdown({
-    exportedMarkdown: deepsecGeneratedReport?.markdown,
+    exportedMarkdown:
+      deepsecPersistedFindingsReport && (deepsecPersistedFindingsReport.findingCount || !deepsecGeneratedReport)
+        ? deepsecPersistedFindingsReport.markdown
+        : deepsecGeneratedReport?.markdown || deepsecPersistedFindingsReport?.markdown,
     failureReason,
     lastOutput: lastStderr || lastStdout,
     statusOutput

@@ -15,6 +15,7 @@ const RUNNER_SHELL_EXACT_FILES = new Set([
   "www/lib/auth.ts",
   "www/lib/blob-store.ts",
   "www/lib/constants.ts",
+  "www/lib/deepsec-partial-report.ts",
   "www/lib/dev-agent-ash-spec.ts",
   "www/lib/dev-agent-ash.ts",
   "www/lib/dev-agents.ts",
