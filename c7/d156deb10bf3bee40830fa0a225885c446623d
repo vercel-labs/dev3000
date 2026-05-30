@@ -1,0 +1,29 @@
+www/lib/deepsec-partial-report.ts
+  s_5da4393566ec36::t_a306c6140f126d 1-32,38-65,69-108
+  s_5da4393566ec36::t_e46dcd32c2b573 33-37,66-68
+www/app/api/cloud/fix-workflow/steps.ts
+  s_5da4393566ec36::t_24d990617cfadc 21-23
+  s_5da4393566ec36::t_34c00c2555eb73 4226-4390
+  s_5da4393566ec36::t_843612f44a5746 4040
+  s_5da4393566ec36::t_59d1fd3ede4a0d 5697-5701,5704-5707
+www/lib/skill-runner-shell-source.ts
+  s_5da4393566ec36::t_c8e57c1cee8de4 18
+www/lib/deepsec-partial-report.test.ts
+  s_5da4393566ec36::t_d86a1fbca708a0 1-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c7d156deb10bf3bee40830fa0a225885c446623d",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
