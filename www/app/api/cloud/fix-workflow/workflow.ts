@@ -1506,8 +1506,7 @@ async function createGenericFailureReportBlob(
     }
 
     const blob = await putWorkflowReportBlob(progressContext.runId, JSON.stringify(report, null, 2), {
-      mirrorTarget: progressContext.controlPlaneMirrorTarget,
-      userId: progressContext.userId
+      mirrorTarget: progressContext.controlPlaneMirrorTarget
     })
     workflowLog(`[Workflow] Generic partial failure report saved: ${blob.appUrl}`)
     return blob.appUrl

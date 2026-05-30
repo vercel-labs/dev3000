@@ -15,31 +15,24 @@ function normalizeMirrorApiBaseUrl(input: string): string | null {
 async function mirrorWorkflowReportBlob(
   pathname: string,
   content: string,
-  mirrorTarget: WorkflowRunMirrorTarget | null | undefined,
-  userId: string | undefined
+  mirrorTarget: WorkflowRunMirrorTarget | null | undefined
 ): Promise<string | undefined> {
   if (!mirrorTarget) return undefined
 
   const apiBaseUrl = normalizeMirrorApiBaseUrl(mirrorTarget.apiBaseUrl)
-  const accessToken = mirrorTarget.accessToken?.trim()
   const internalSecret = mirrorTarget.internalSecret?.trim()
-  if (!apiBaseUrl || (!accessToken && !internalSecret)) return undefined
+  if (!apiBaseUrl || !internalSecret) return undefined
 
   const headers: HeadersInit = {
     "content-type": "application/json",
-    "x-dev3000-workflow-mirror": "1"
-  }
-
-  if (internalSecret) {
-    headers["x-dev3000-workflow-mirror-secret"] = internalSecret
-  } else if (accessToken) {
-    headers.authorization = `Bearer ${accessToken}`
+    "x-dev3000-workflow-mirror": "1",
+    "x-dev3000-workflow-mirror-secret": internalSecret
   }
 
   const response = await fetch(new URL("/api/internal/report-blobs", apiBaseUrl), {
     method: "POST",
     headers,
-    body: JSON.stringify({ pathname, content, contentType: "application/json", userId }),
+    body: JSON.stringify({ pathname, content, contentType: "application/json" }),
     cache: "no-store"
   })
 
@@ -55,7 +48,7 @@ async function mirrorWorkflowReportBlob(
 export async function putWorkflowReportBlob(
   reportId: string,
   reportJson: string,
-  options?: { mirrorTarget?: WorkflowRunMirrorTarget | null; userId?: string }
+  options?: { mirrorTarget?: WorkflowRunMirrorTarget | null }
 ): Promise<{ appUrl: string }> {
   const pathname = `report-${reportId}.json`
   const blob = await putBlobAndBuildUrl(pathname, reportJson, {
@@ -66,7 +59,7 @@ export async function putWorkflowReportBlob(
   })
 
   try {
-    const mirroredAppUrl = await mirrorWorkflowReportBlob(pathname, reportJson, options?.mirrorTarget, options?.userId)
+    const mirroredAppUrl = await mirrorWorkflowReportBlob(pathname, reportJson, options?.mirrorTarget)
     if (mirroredAppUrl) {
       return { appUrl: mirroredAppUrl }
     }
