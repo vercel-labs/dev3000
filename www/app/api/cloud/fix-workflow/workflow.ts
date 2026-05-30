@@ -12,7 +12,7 @@
  */
 
 import { sleep } from "workflow"
-import { readBlobJson } from "@/lib/blob-store"
+import { putBlobAndBuildUrl, readBlobJson } from "@/lib/blob-store"
 import type { DevAgentAshCompiledSpec, DevAgentEarlyExitRule, DevAgentSkillRef } from "@/lib/dev-agents"
 import { isSelfHostedSkillRunnerRuntime } from "@/lib/skill-runner-runtime"
 import {
@@ -23,6 +23,7 @@ import {
 } from "@/lib/telemetry"
 import { getWorkflowReportCostUsd } from "@/lib/workflow-report-summary"
 import { persistWorkflowRun, type WorkflowRun, type WorkflowRunMirrorTarget } from "@/lib/workflow-storage"
+import type { WorkflowReport } from "@/types"
 
 const workflowLog = console.log
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES = 50 * 1024
@@ -669,11 +670,51 @@ export async function cloudFixWorkflow(params: {
           typeof latestProcessOutput?.elapsedSeconds === "number"
             ? ` Last observed elapsed time: ${latestProcessOutput.elapsedSeconds}s.`
             : ""
-        throw new Error(
-          `DeepSec process did not complete within the 30 minute cloud budget.${elapsedSuffix}${
-            outputPreview ? ` Last DeepSec output: ${outputPreview}` : ""
-          }`
-        )
+        const failureMessage = `DeepSec process did not complete within the 30 minute cloud budget.${elapsedSuffix}${
+          outputPreview ? ` Last DeepSec output: ${outputPreview}` : ""
+        }`
+
+        try {
+          const partialResult = await deepSecFinalizePartial(
+            {
+              ...deepSecStepParams,
+              sandboxId: processState.sandboxId,
+              projectDir: processState.projectDir
+            },
+            preparedState,
+            processState,
+            failureMessage
+          )
+          activeSandboxId = partialResult.sandboxId
+
+          if (progressContext) {
+            await saveFailureStatus(progressContext, failureMessage, partialResult.reportBlobUrl)
+            workflowLog(`[Workflow] Saved partial failure report for ${progressContext.runId}`)
+          }
+
+          await cleanupSandbox(activeSandboxId)
+
+          return Response.json({
+            blobUrl: partialResult.reportBlobUrl,
+            reportId: partialResult.reportId,
+            status: "failure",
+            beforeCls: partialResult.beforeCls,
+            afterCls: partialResult.afterCls,
+            pr: null,
+            prError: failureMessage
+          })
+        } catch (partialError) {
+          workflowLog(
+            `[Workflow] Failed to save partial DeepSec report: ${
+              partialError instanceof Error ? partialError.message : String(partialError)
+            }`
+          )
+          throw new Error(
+            `${failureMessage} Partial report generation also failed: ${
+              partialError instanceof Error ? partialError.message : String(partialError)
+            }`
+          )
+        }
       }
 
       fixResult = await deepSecFinalize(
@@ -1107,6 +1148,17 @@ async function deepSecFinalize(
   return deepSecFinalizeStep(params, preparedState, processState)
 }
 
+async function deepSecFinalizePartial(
+  params: Parameters<typeof import("./steps").deepSecFinalizePartialStep>[0],
+  preparedState: import("./steps").DeepSecPreparedState,
+  processState: Parameters<typeof import("./steps").deepSecFinalizePartialStep>[2],
+  failureReason: string
+): Promise<FixResult> {
+  "use step"
+  const { deepSecFinalizePartialStep } = await import("./steps")
+  return deepSecFinalizePartialStep(params, preparedState, processState, failureReason)
+}
+
 async function agentFixLoop(
   sandboxId: string,
   devUrl: string,
@@ -1371,6 +1423,105 @@ async function preflightGitHubPatRepoAccess(repoUrl: string, githubPat: string):
   return preflightGitHubPatRepoAccessStep(repoUrl, githubPat)
 }
 
+function resolveWorkflowType(value: string | undefined, fallback?: WorkflowRun["type"]): WorkflowRun["type"] {
+  switch (value || fallback) {
+    case "cls-fix":
+    case "prompt":
+    case "design-guidelines":
+    case "react-performance":
+    case "url-audit":
+    case "turbopack-bundle-analyzer":
+    case "deepsec-security-scan":
+    case "vercel-optimize-audit":
+      return (value || fallback) as WorkflowRun["type"]
+    default:
+      return fallback || "cls-fix"
+  }
+}
+
+function markdownFence(value: string): string {
+  return value.replaceAll("```", "'''")
+}
+
+async function createGenericFailureReportBlob(
+  progressContext: ProgressContext,
+  errorMessage: string,
+  progressLogs: string[] | undefined,
+  existingRun?: WorkflowRun
+): Promise<string | undefined> {
+  try {
+    const workflowType = resolveWorkflowType(progressContext.workflowType, existingRun?.type)
+    const runStartedAt = Date.parse(progressContext.timestamp)
+    const completedAt = new Date()
+    const totalMs = Number.isFinite(runStartedAt) ? Math.max(0, completedAt.getTime() - runStartedAt) : 0
+    const logText = progressLogs?.length ? progressLogs.join("\n") : "No progress logs were captured before failure."
+    const generatedReportMarkdown = [
+      "# Partial Run Report",
+      "",
+      "> This run failed before the workflow generated its normal final report.",
+      "",
+      "## Failure",
+      "",
+      "```",
+      markdownFence(formatWorkflowErrorPreview(errorMessage, 8000) || "Unknown failure"),
+      "```",
+      "",
+      "## Progress Logs",
+      "",
+      "```",
+      markdownFence(logText),
+      "```"
+    ].join("\n")
+
+    const report: WorkflowReport = {
+      id: progressContext.runId,
+      projectName: progressContext.projectName,
+      timestamp: completedAt.toISOString(),
+      devAgentId: progressContext.devAgentId,
+      devAgentName: progressContext.devAgentName,
+      devAgentDescription: progressContext.devAgentDescription,
+      devAgentRevision: progressContext.devAgentRevision,
+      devAgentSpecHash: progressContext.devAgentSpecHash,
+      devAgentExecutionMode: progressContext.devAgentExecutionMode,
+      devAgentSandboxBrowser: progressContext.devAgentSandboxBrowser,
+      workflowType,
+      sandboxDevUrl: progressContext.sandboxUrl || "",
+      verificationStatus: "error",
+      agentAnalysis: generatedReportMarkdown,
+      agentAnalysisModel: "workflow-failure",
+      generatedReportMarkdown,
+      generatedReportFilename: `${progressContext.runId}-partial-run-report.md`,
+      completionStatus: "partial",
+      partialReason: "The workflow failed before a complete report was generated.",
+      failureReason: errorMessage,
+      d3kLogs: logText,
+      gatewayUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0 },
+      successEvalResult: false,
+      isMarketplaceAgent: progressContext.isMarketplaceAgent || undefined,
+      timing: {
+        total: { initMs: 0, agentMs: totalMs, totalMs },
+        agent: { steps: [{ name: "Run before failure", durationMs: totalMs }] }
+      }
+    }
+
+    const blob = await putBlobAndBuildUrl(`report-${progressContext.runId}.json`, JSON.stringify(report, null, 2), {
+      contentType: "application/json",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      absoluteUrl: true
+    })
+    workflowLog(`[Workflow] Generic partial failure report saved: ${blob.appUrl}`)
+    return blob.appUrl
+  } catch (error) {
+    workflowLog(
+      `[Workflow] Failed to create generic partial failure report: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+    return undefined
+  }
+}
+
 async function saveDoneStatus(
   progressContext: ProgressContext,
   reportBlobUrl: string,
@@ -1392,17 +1543,7 @@ async function saveDoneStatus(
     projectName: progressContext.projectName,
     timestamp: progressContext.timestamp,
     status: "done",
-    type:
-      (progressContext.workflowType as
-        | "cls-fix"
-        | "prompt"
-        | "design-guidelines"
-        | "react-performance"
-        | "url-audit"
-        | "turbopack-bundle-analyzer"
-        | "deepsec-security-scan") ||
-      existingRun?.type ||
-      "cls-fix",
+    type: resolveWorkflowType(progressContext.workflowType, existingRun?.type),
     runnerKind: progressContext.runnerKind ?? existingRun?.runnerKind,
     devAgentId: progressContext.devAgentId,
     devAgentName: progressContext.devAgentName,
@@ -1504,7 +1645,11 @@ async function loadWorkflowReportSummary(reportBlobUrl: string): Promise<Workflo
   }
 }
 
-async function saveFailureStatus(progressContext: ProgressContext, errorMessage: string): Promise<void> {
+async function saveFailureStatus(
+  progressContext: ProgressContext,
+  errorMessage: string,
+  reportBlobUrl?: string | null
+): Promise<void> {
   "use step"
   try {
     const existingRun = await getProgressRunSnapshot(progressContext)
@@ -1512,6 +1657,10 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])],
       120
     )
+    const effectiveReportBlobUrl =
+      reportBlobUrl ||
+      existingRun?.reportBlobUrl ||
+      (await createGenericFailureReportBlob(progressContext, errorMessage, progressLogs, existingRun))
     const nextRun = {
       ...existingRun,
       id: progressContext.runId,
@@ -1519,17 +1668,7 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       projectName: progressContext.projectName,
       timestamp: progressContext.timestamp,
       status: "failure",
-      type:
-        (progressContext.workflowType as
-          | "cls-fix"
-          | "prompt"
-          | "design-guidelines"
-          | "react-performance"
-          | "url-audit"
-          | "turbopack-bundle-analyzer"
-          | "deepsec-security-scan") ||
-        existingRun?.type ||
-        "cls-fix",
+      type: resolveWorkflowType(progressContext.workflowType, existingRun?.type),
       runnerKind: progressContext.runnerKind ?? existingRun?.runnerKind,
       devAgentId: progressContext.devAgentId,
       devAgentName: progressContext.devAgentName,
@@ -1544,6 +1683,7 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       stepNumber: Math.max(existingRun?.stepNumber ?? 0, progressContext.activeStepNumber ?? 0, 1),
       currentStep: "Workflow failed",
       completedAt: new Date().toISOString(),
+      reportBlobUrl: effectiveReportBlobUrl,
       error: errorMessage,
       sandboxUrl: progressContext.sandboxUrl ?? existingRun?.sandboxUrl,
       progressLogs

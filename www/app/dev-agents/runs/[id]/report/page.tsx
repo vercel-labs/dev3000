@@ -1963,6 +1963,10 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
   const runEndedAt = run.completedAt ? new Date(run.completedAt) : null
   const runDurationStats = getRunDurationStats(runStartedAt, runEndedAt, report.timing?.total.totalMs)
   const displayedDurationMs = runDurationStats.wallClockMs ?? runDurationStats.measuredMs
+  const isPartialReport = report.completionStatus === "partial" || Boolean(report.partialReason || report.failureReason)
+  const partialReportReason =
+    report.partialReason ||
+    (run.status === "failure" ? "This run failed before the workflow generated its normal final report." : undefined)
   const successEvalStyles =
     effectiveSuccessEvalResult === true
       ? {
@@ -1979,6 +1983,21 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
         }
   return (
     <div className="space-y-6">
+      {isPartialReport ? (
+        <div className="rounded-lg border border-[#333] bg-[#111] p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 space-y-1">
+              <div className="text-sm font-medium text-[#ededed]">Partial report</div>
+              <p className="text-sm leading-6 text-[#888]">
+                {partialReportReason ||
+                  "The workflow saved available work after the run stopped before clean completion."}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {(effectiveSuccessEvalResult != null || secondarySummary) && (
         <div className="grid gap-4 md:grid-cols-2">
           {effectiveSuccessEvalResult != null && (

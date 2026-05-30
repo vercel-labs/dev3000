@@ -4694,6 +4694,98 @@ function formatDeepSecTranscript(entries: DeepSecCommandTranscriptEntry[]): stri
     .join("\n\n")
 }
 
+async function runDeepSecBestEffortCommandInSandbox(
+  sandbox: Sandbox,
+  cwd: string,
+  label: string,
+  command: string,
+  env: Record<string, string>,
+  progressContext: ProgressContext | null | undefined,
+  timeoutMs = DEEPSEC_COMMAND_TIMEOUT_MS
+): Promise<DeepSecCommandTranscriptEntry> {
+  await appendProgressLog(progressContext, `[DeepSec] ${label}...`)
+  const startedAt = Date.now()
+  let result: Awaited<ReturnType<typeof runSandboxCommandWithOptions>>
+
+  try {
+    result = await runSandboxCommandWithOptions(
+      sandbox,
+      {
+        cmd: "sh",
+        args: ["-lc", command],
+        cwd,
+        env
+      },
+      { timeoutMs }
+    )
+  } catch (error) {
+    const message = formatErrorMessage(error)
+    await appendProgressLog(progressContext, `[DeepSec] ${label} failed: ${formatClaudeOutputPreview(message, 360)}`)
+    return {
+      command,
+      durationMs: Date.now() - startedAt,
+      exitCode: 1,
+      label,
+      stderr: message,
+      stdout: ""
+    }
+  }
+
+  const durationMs = Date.now() - startedAt
+  const entry = {
+    command,
+    durationMs,
+    exitCode: result.exitCode,
+    label,
+    stderr: result.stderr.trim(),
+    stdout: result.stdout.trim()
+  }
+  const preview = formatClaudeOutputPreview(result.stderr || result.stdout, 360)
+  await appendProgressLog(
+    progressContext,
+    result.exitCode === 0
+      ? `[DeepSec] ${label} completed (${Math.round(durationMs / 1000)}s)${preview ? `: ${preview}` : ""}`
+      : `[DeepSec] ${label} failed exit=${result.exitCode}${preview ? `: ${preview}` : ""}`
+  )
+  return entry
+}
+
+function buildPartialDeepSecReportMarkdown({
+  exportedMarkdown,
+  failureReason,
+  lastOutput,
+  statusOutput
+}: {
+  exportedMarkdown?: string
+  failureReason: string
+  lastOutput?: string
+  statusOutput?: string
+}): string {
+  const partialNotice = [
+    "# Partial DeepSec Security Scan",
+    "",
+    "> This report is incomplete. The DeepSec run failed or timed out before the workflow could finish a clean export.",
+    "",
+    "## Partial Status",
+    "",
+    `Failure reason: ${sanitizeOneLine(failureReason) || "Unknown failure"}`,
+    statusOutput ? `DeepSec status: ${sanitizeOneLine(statusOutput)}` : "",
+    "",
+    "The findings below come from whatever DeepSec had persisted before the run stopped. Treat coverage as incomplete.",
+    lastOutput
+      ? ["", "## Last DeepSec Output", "", "```", stripAnsiCodes(lastOutput).trim().slice(-4000), "```"].join("\n")
+      : ""
+  ]
+    .filter(Boolean)
+    .join("\n")
+
+  return exportedMarkdown?.trim() ? `${partialNotice}\n\n---\n\n${exportedMarkdown.trim()}` : partialNotice
+}
+
+function sanitizeOneLine(value: string): string {
+  return stripAnsiCodes(value).replace(/\s+/g, " ").trim().slice(0, 500)
+}
+
 async function runDeepSecCliScanInSandbox({
   gatewayAuthSource,
   gatewayAuthToken,
@@ -5316,6 +5408,253 @@ process.stdout.write(JSON.stringify({
     lastStdout,
     lastStderr,
     totalTokens: (processState.totalTokens ?? 0) + observedTotalTokens || undefined
+  }
+}
+
+export async function deepSecFinalizePartialStep(
+  params: DeepSecStepParams,
+  preparedState: DeepSecPreparedState,
+  processState: DeepSecProcessState | DeepSecProcessPollState,
+  failureReason: string
+): Promise<{
+  sandboxId: string
+  reportBlobUrl: string
+  reportId: string
+  beforeCls: number | null
+  afterCls: number | null
+  status: "improved" | "unchanged" | "degraded" | "no-changes"
+  agentSummary: string
+  gitDiff: string | null
+  timing: AgentStepTiming
+  successEvalResult?: boolean | null
+}> {
+  const timer = new StepTimer()
+  const sandboxParams = {
+    ...params,
+    sandboxId: processState.sandboxId,
+    sandboxProjectId: processState.sandboxProjectId || params.sandboxProjectId,
+    sandboxTeamId: processState.sandboxTeamId || params.sandboxTeamId,
+    projectDir: processState.projectDir
+  }
+  timer.start("Reconnect to sandbox")
+  const { sandbox, effectiveProjectDir } = await reconnectDeepSecSandbox(sandboxParams, { allowRecreate: false })
+  timer.end()
+
+  const projectRoot = getSandboxProjectRoot(effectiveProjectDir)
+  const env = buildSandboxToolchainEnv()
+  const transcriptEntries = [...processState.transcriptEntries]
+  const elapsedSeconds =
+    "elapsedSeconds" in processState && typeof processState.elapsedSeconds === "number"
+      ? processState.elapsedSeconds
+      : Math.max(0, Math.round((Date.now() - Date.parse(processState.startedAt)) / 1000))
+  const lastStdout = "lastStdout" in processState ? processState.lastStdout.trim() : ""
+  const lastStderr = "lastStderr" in processState ? processState.lastStderr.trim() : ""
+
+  await updateProgress(params.progressContext, 3, "Generating partial DeepSec report...", params.devUrl)
+  await appendProgressLog(
+    params.progressContext,
+    `[DeepSec] Saving partial report after failure: ${formatClaudeOutputPreview(failureReason, 360)}`
+  )
+
+  if (lastStdout || lastStderr) {
+    transcriptEntries.push({
+      command: DEEPSEC_PROCESS_COMMAND,
+      durationMs: elapsedSeconds * 1000,
+      exitCode: "exitCode" in processState && typeof processState.exitCode === "number" ? processState.exitCode : 124,
+      label: "Process candidates (partial output)",
+      stderr: lastStderr,
+      stdout: lastStdout
+    })
+  }
+
+  if (processState.pid) {
+    timer.start("Stop DeepSec process")
+    transcriptEntries.push(
+      await runDeepSecBestEffortCommandInSandbox(
+        sandbox,
+        projectRoot,
+        "Stop DeepSec process",
+        `kill ${shellEscape(processState.pid)} 2>/dev/null || true; sleep 2; kill -9 ${shellEscape(processState.pid)} 2>/dev/null || true`,
+        env,
+        params.progressContext,
+        15000
+      )
+    )
+    timer.end()
+  }
+
+  timer.start("Export partial markdown report")
+  transcriptEntries.push(
+    await runDeepSecBestEffortCommandInSandbox(
+      sandbox,
+      projectRoot,
+      "Export partial markdown report",
+      "cd .deepsec && corepack pnpm deepsec export --format md-dir --out ./findings",
+      env,
+      params.progressContext,
+      120000
+    )
+  )
+  timer.end()
+
+  timer.start("Capture partial status")
+  transcriptEntries.push(
+    await runDeepSecBestEffortCommandInSandbox(
+      sandbox,
+      projectRoot,
+      "Capture partial status",
+      "cd .deepsec && corepack pnpm deepsec status",
+      env,
+      params.progressContext,
+      120000
+    )
+  )
+  timer.end()
+
+  timer.start("Get git diff")
+  const diffResult = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    "cd /vercel/sandbox && git diff --no-color -- . ':!package.json' ':!package-lock.json' ':!pnpm-lock.yaml' 2>/dev/null || echo ''"
+  ])
+  const gitDiff = diffResult.stdout.trim() || null
+  timer.end()
+
+  timer.start("Build partial report payload")
+  const deepsecGeneratedReport = await readDeepSecGeneratedReportMarkdown(
+    sandbox,
+    effectiveProjectDir,
+    params.progressContext
+  )
+  const statusOutput = transcriptEntries.at(-1)?.stdout.trim() || ""
+  const generatedReportMarkdown = buildPartialDeepSecReportMarkdown({
+    exportedMarkdown: deepsecGeneratedReport?.markdown,
+    failureReason,
+    lastOutput: lastStderr || lastStdout,
+    statusOutput
+  })
+  const transcript = formatDeepSecTranscript(transcriptEntries)
+  const transcriptUsage = getDeepSecTranscriptUsage(transcript)
+  const deepSecCostUsd =
+    processState.costUsd ?? transcriptUsage.costUsd ?? getGeneratedReportCostUsd(generatedReportMarkdown) ?? 0
+  const deepSecTotalTokens =
+    processState.totalTokens ??
+    transcriptUsage.totalTokens ??
+    getGeneratedReportTotalTokens(generatedReportMarkdown) ??
+    0
+  const { skillsInstalled } = await readSandboxSkillsInfo(sandbox)
+  const afterD3kLogs = "(DeepSec workflow does not use d3k browser verification)"
+  const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${params.initD3kLogs}\n\n=== Step 2: DeepSec scan ===\n${afterD3kLogs}`
+
+  const finalizeTiming = timer.getData()
+  const agentSteps = [
+    ...preparedState.timing.steps,
+    {
+      name: "Process candidates",
+      durationMs: elapsedSeconds * 1000,
+      startedAt: processState.startedAt
+    },
+    ...finalizeTiming.steps
+  ]
+  const agentMs = agentSteps.reduce((total, step) => total + step.durationMs, 0)
+  const timing: AgentStepTiming = {
+    totalMs: agentMs,
+    steps: agentSteps
+  }
+  const initMs = params.initTiming?.totalMs ?? 0
+  const reportTiming: WorkflowReport["timing"] = {
+    total: {
+      initMs,
+      agentMs,
+      totalMs: initMs + agentMs
+    },
+    init: params.initTiming
+      ? {
+          sandboxCreationMs: params.initTiming.sandboxCreation.totalMs,
+          fromSnapshot: params.fromSnapshot ?? false,
+          steps: params.initTiming.steps.map((step) => ({ name: step.name, durationMs: step.durationMs }))
+        }
+      : undefined,
+    agent: {
+      steps: agentSteps.map((step) => ({ name: step.name, durationMs: step.durationMs }))
+    }
+  }
+
+  const report: WorkflowReport = {
+    id: params.reportId,
+    projectName: params.projectName,
+    timestamp: new Date().toISOString(),
+    devAgentId: params.progressContext?.devAgentId,
+    devAgentName: params.devAgentName || params.progressContext?.devAgentName,
+    devAgentDescription: params.progressContext?.devAgentDescription,
+    devAgentRevision: params.progressContext?.devAgentRevision,
+    devAgentSpecHash: params.progressContext?.devAgentSpecHash,
+    devAgentExecutionMode: params.devAgentExecutionMode || params.progressContext?.devAgentExecutionMode,
+    devAgentSandboxBrowser: params.devAgentSandboxBrowser || params.progressContext?.devAgentSandboxBrowser,
+    workflowType: "deepsec-security-scan",
+    devAgentPrompt: params.devAgentInstructions || undefined,
+    devAgentInstructions: params.devAgentInstructions || undefined,
+    devAgentSkills: params.devAgentSkillRefs?.length ? params.devAgentSkillRefs : undefined,
+    analysisTargetType: "vercel-project",
+    customPrompt: params.customPrompt ?? undefined,
+    systemPrompt: "[DeepSec deterministic CLI workflow]",
+    sandboxDevUrl: params.devUrl,
+    startPath: params.startPath,
+    repoUrl: params.repoUrl,
+    repoBranch: params.repoBranch,
+    projectDir: effectiveProjectDir || undefined,
+    repoOwner: params.repoOwner || undefined,
+    repoName: params.repoName || undefined,
+    verificationStatus: "error",
+    costUsd: deepSecCostUsd,
+    agentAnalysis: transcript,
+    agentAnalysisModel: "deepsec-cli",
+    generatedReportMarkdown,
+    generatedReportFilename: `${params.reportId}-partial-deepsec-report.md`,
+    completionStatus: "partial",
+    partialReason: failureReason,
+    failureReason,
+    skillsInstalled: skillsInstalled.length > 0 ? skillsInstalled : undefined,
+    skillsLoaded: ["deepsec"],
+    gitDiff: gitDiff ?? undefined,
+    d3kLogs: combinedD3kLogs,
+    initD3kLogs: params.initD3kLogs,
+    afterD3kLogs,
+    webVitalsDiagnostics: {},
+    gatewayUsage: {
+      promptTokens: 0,
+      completionTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      totalTokens: deepSecTotalTokens
+    },
+    isMarketplaceAgent: params.progressContext?.isMarketplaceAgent || undefined,
+    successEval: params.devAgentSuccessEval || undefined,
+    successEvalResult: false,
+    fromSnapshot: params.fromSnapshot ?? false,
+    snapshotId: params.snapshotId,
+    timing: reportTiming
+  }
+
+  const blob = await putBlobAndBuildUrl(`report-${params.reportId}.json`, JSON.stringify(report, null, 2), {
+    contentType: "application/json",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    absoluteUrl: true
+  })
+  workflowLog(`[DeepSec] Partial report saved: ${blob.appUrl}`)
+  timer.end()
+
+  return {
+    sandboxId: sandbox.sandboxId,
+    reportBlobUrl: blob.appUrl,
+    reportId: params.reportId,
+    beforeCls: null,
+    afterCls: null,
+    status: "no-changes",
+    agentSummary: "DeepSec saved a partial report after the run failed before clean completion.",
+    gitDiff,
+    timing,
+    successEvalResult: false
   }
 }
 

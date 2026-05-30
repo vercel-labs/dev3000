@@ -139,6 +139,9 @@ export interface WorkflowReport {
   agentAnalysisModel?: string // e.g. "anthropic/claude-sonnet-4-20250514"
   generatedReportMarkdown?: string // Workflow-generated report text suitable for embedding/downloading
   generatedReportFilename?: string
+  completionStatus?: "complete" | "partial"
+  partialReason?: string
+  failureReason?: string
   skillsInstalled?: string[] // Skills available in the sandbox at runtime
   skillsLoaded?: string[] // Skills explicitly loaded by the agent via get_skill
   turbopackBundleComparison?: TurbopackBundleComparison // Before/after NDJSON bundle metrics (turbopack workflow)
