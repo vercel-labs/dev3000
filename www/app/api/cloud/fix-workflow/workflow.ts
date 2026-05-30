@@ -12,7 +12,7 @@
  */
 
 import { sleep } from "workflow"
-import { putBlobAndBuildUrl, readBlobJson } from "@/lib/blob-store"
+import { readBlobJson } from "@/lib/blob-store"
 import type { DevAgentAshCompiledSpec, DevAgentEarlyExitRule, DevAgentSkillRef } from "@/lib/dev-agents"
 import { isSelfHostedSkillRunnerRuntime } from "@/lib/skill-runner-runtime"
 import {
@@ -21,6 +21,7 @@ import {
   emitTelemetryEvent,
   relayTelemetryEventToControlPlane
 } from "@/lib/telemetry"
+import { putWorkflowReportBlob } from "@/lib/workflow-report-blob"
 import { getWorkflowReportCostUsd } from "@/lib/workflow-report-summary"
 import { persistWorkflowRun, type WorkflowRun, type WorkflowRunMirrorTarget } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
@@ -1504,11 +1505,9 @@ async function createGenericFailureReportBlob(
       }
     }
 
-    const blob = await putBlobAndBuildUrl(`report-${progressContext.runId}.json`, JSON.stringify(report, null, 2), {
-      contentType: "application/json",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      absoluteUrl: true
+    const blob = await putWorkflowReportBlob(progressContext.runId, JSON.stringify(report, null, 2), {
+      mirrorTarget: progressContext.controlPlaneMirrorTarget,
+      userId: progressContext.userId
     })
     workflowLog(`[Workflow] Generic partial failure report saved: ${blob.appUrl}`)
     return blob.appUrl

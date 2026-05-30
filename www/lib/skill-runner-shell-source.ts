@@ -36,6 +36,7 @@ const RUNNER_SHELL_EXACT_FILES = new Set([
   "www/lib/vercel-teams.ts",
   "www/lib/workflow-api.ts",
   "www/lib/workflow-logger.ts",
+  "www/lib/workflow-report-blob.ts",
   "www/lib/workflow-report-summary.ts",
   "www/lib/workflow-storage.ts",
   "www/next.config.ts",
