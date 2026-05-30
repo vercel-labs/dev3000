@@ -1,0 +1,25 @@
+www/lib/workflow-report-blob.ts
+  s_5da4393566ec36::t_f87ebc5a8c8e05 18,24,28-29,35,51,62
+www/app/api/cloud/fix-workflow/workflow.ts
+  s_5da4393566ec36::t_835a81bb0dd18e 1509
+www/app/api/cloud/fix-workflow/steps.ts
+  s_5da4393566ec36::t_65b708a07d3269 3954,5815,6010,6738,6983,12204
+www/app/api/internal/report-blobs/route.ts
+  s_5da4393566ec36::t_258d0891bb770f 12,18,26-28,30-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "093a35a2644ba952a51b03dfe1b5e679251f077e",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
