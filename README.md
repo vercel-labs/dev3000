@@ -85,16 +85,36 @@ d3k --help             # Show all options
 | `-s, --script <script>` | Script to run (e.g. dev, main.py) |
 | `-c, --command <command>` | Custom command (overrides auto-detection) |
 | `--browser <path>` | Path to browser executable (Chrome, Arc, etc.) |
+| `--app-url <url>` | URL to open in the monitored browser instead of the local app URL |
 | `--profile-dir <dir>` | Chrome profile directory |
 | `--servers-only` | Run servers only, skip browser launch |
 | `--headless` | Run browser in headless mode (for CI) |
 | `--debug` | Enable debug logging (disables TUI) |
 | `-t, --tail` | Output logfile to terminal (like tail -f) |
 | `--no-tui` | Disable TUI, use standard terminal output |
+| `--portless` | Use portless `.localhost` aliases instead of direct localhost URLs |
 | `--with-agent <cmd>` | Run agent in split-screen mode (requires tmux) |
 | `--no-agent` | Skip agent selection, run standalone |
 | `--plugin-react-scan` | Enable react-scan performance monitoring |
 | `--date-time <format>` | Timestamp format: 'local' or 'utc' |
+
+### Custom App URLs
+
+By default, d3k opens the detected app server at `http://localhost:<port>`.
+Use `--app-url` when your app should be monitored through a stable local
+hostname or proxy URL instead:
+
+```bash
+d3k --app-url http://myapp.localhost:1355 --command "portless myapp next dev"
+```
+
+For the built-in portless integration, use `--portless`. d3k will register a
+project-specific `.localhost` alias and open that stable URL in the monitored
+browser:
+
+```bash
+d3k --portless
+```
 
 ## How It Works
 
