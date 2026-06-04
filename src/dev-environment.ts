@@ -22,16 +22,14 @@ import { CDPMonitor } from "./cdp-monitor.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { DevTUI } from "./tui-interface.js"
-import { formatMcpConfigTargets, MCP_CONFIG_TARGETS, type McpConfigTarget } from "./utils/mcp-configs.js"
+import {
+  formatMcpConfigTargets,
+  MCP_CONFIG_TARGETS,
+  type McpConfigTarget,
+  upsertMcpServerConfig
+} from "./utils/mcp-configs.js"
 import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
-
-// MCP names
-const MCP_NAMES = {
-  DEV3000: "dev3000",
-  CHROME_DEVTOOLS: "dev3000-chrome-devtools",
-  NEXTJS_DEV: "dev3000-nextjs-dev"
-} as const
 
 interface DevEnvironmentOptions {
   port: string
@@ -212,31 +210,10 @@ async function ensureMcpServers(mcpPort: string, _appPort: string, _enableChrome
       settings = {}
     }
 
-    // Ensure mcpServers structure exists
-    if (!settings.mcpServers) {
-      settings.mcpServers = {}
-    }
+    const result = upsertMcpServerConfig(settings, "claude", mcpPort)
 
-    let added = false
-
-    // Add dev3000 MCP server (HTTP type)
-    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes,
-    // so users only need to configure dev3000 once!
-    if (!settings.mcpServers[MCP_NAMES.DEV3000]) {
-      settings.mcpServers[MCP_NAMES.DEV3000] = {
-        type: "http",
-        url: `http://localhost:${mcpPort}/mcp`
-      }
-      added = true
-    }
-
-    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
-    // dev3000 MCP server now orchestrates these internally via the gateway pattern
-
-    // Write if we added anything
-    if (added) {
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
+    if (result.changed) {
+      writeFileSync(settingsPath, `${JSON.stringify(result.config, null, 2)}\n`, "utf-8")
     }
   } catch (_error) {
     // Ignore errors - settings file manipulation is optional
@@ -272,30 +249,10 @@ async function ensureCursorMcpServers(
       settings = {}
     }
 
-    // Ensure mcpServers structure exists
-    if (!settings.mcpServers) {
-      settings.mcpServers = {}
-    }
+    const result = upsertMcpServerConfig(settings, "cursor", mcpPort)
 
-    let added = false
-
-    // Add dev3000 MCP server
-    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes
-    if (!settings.mcpServers[MCP_NAMES.DEV3000]) {
-      settings.mcpServers[MCP_NAMES.DEV3000] = {
-        type: "http",
-        url: `http://localhost:${mcpPort}/mcp`
-      }
-      added = true
-    }
-
-    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
-    // dev3000 MCP server now orchestrates these internally via the gateway pattern
-
-    // Write if we added anything
-    if (added) {
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
+    if (result.changed) {
+      writeFileSync(settingsPath, `${JSON.stringify(result.config, null, 2)}\n`, "utf-8")
     }
   } catch (_error) {
     // Ignore errors - settings file manipulation is optional
@@ -333,31 +290,10 @@ async function ensureOpenCodeMcpServers(
       settings = {}
     }
 
-    // Ensure mcp structure exists
-    if (!settings.mcp) {
-      settings.mcp = {}
-    }
+    const result = upsertMcpServerConfig(settings, "opencode", mcpPort)
 
-    let added = false
-
-    // Add dev3000 MCP server - use npx with mcp-client to connect to HTTP server
-    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes
-    if (!settings.mcp[MCP_NAMES.DEV3000]) {
-      settings.mcp[MCP_NAMES.DEV3000] = {
-        type: "remote",
-        url: `http://localhost:${mcpPort}/mcp`,
-        enabled: true
-      }
-      added = true
-    }
-
-    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
-    // dev3000 MCP server now orchestrates these internally via the gateway pattern
-
-    // Write if we added anything
-    if (added) {
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
+    if (result.changed) {
+      writeFileSync(settingsPath, `${JSON.stringify(result.config, null, 2)}\n`, "utf-8")
     }
   } catch (_error) {
     // Ignore errors - settings file manipulation is optional
