@@ -1258,7 +1258,8 @@ export async function POST(request: Request) {
         ? {
             apiBaseUrl: workflowParams.controlPlaneBaseUrl,
             accessToken: workflowParams.controlPlaneAccessToken,
-            internalSecret: workflowParams.controlPlaneMirrorSecret
+            internalSecret: workflowParams.controlPlaneMirrorSecret,
+            userId
           }
         : null
 

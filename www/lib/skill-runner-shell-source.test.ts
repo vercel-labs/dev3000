@@ -70,6 +70,7 @@ describe("skill runner shell source manifest", () => {
     expect(isRunnerShellFile("package.json")).toBe(true)
     expect(isRunnerShellFile("bun.lock")).toBe(true)
     expect(isRunnerShellFile("www/package.json")).toBe(true)
+    expect(isRunnerShellFile("www/app/api/blob/route.ts")).toBe(true)
     expect(isRunnerShellFile("www/app/api/cloud/start-fix/route.ts")).toBe(true)
     expect(isRunnerShellFile("www/app/api/cloud/fix-workflow/workflow.ts")).toBe(true)
     expect(isRunnerShellFile("www/app/api/skill-runner-worker/version/route.ts")).toBe(true)
@@ -115,6 +116,7 @@ describe("skill runner shell source manifest", () => {
 
     expect(shellSource.files.length).toBeLessThanOrEqual(75)
     expect(shellFiles).toContain("www/app/api/cloud/start-fix/route.ts")
+    expect(shellFiles).toContain("www/app/api/blob/route.ts")
     expect(shellFiles).toContain("www/app/api/cloud/fix-workflow/workflow.ts")
     expect(shellFiles).toContain("www/app/api/cloud/fix-workflow/steps.ts")
     expect(shellFiles).toContain("www/app/api/skill-runner-worker/version/route.ts")

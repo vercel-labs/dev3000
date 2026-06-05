@@ -6,6 +6,7 @@ const RUNNER_SHELL_EXACT_FILES = new Set([
   "www/app/api/cloud/fix-workflow/health/route.ts",
   "www/app/api/cloud/fix-workflow/steps.ts",
   "www/app/api/cloud/fix-workflow/workflow.ts",
+  "www/app/api/blob/route.ts",
   "www/app/api/cloud/start-fix/route.ts",
   "www/app/api/skill-runner-worker/version/route.ts",
   "www/app/skill-runner-worker-home.tsx",

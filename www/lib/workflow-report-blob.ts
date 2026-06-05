@@ -20,19 +20,26 @@ async function mirrorWorkflowReportBlob(
   if (!mirrorTarget) return undefined
 
   const apiBaseUrl = normalizeMirrorApiBaseUrl(mirrorTarget.apiBaseUrl)
+  const accessToken = mirrorTarget.accessToken?.trim()
   const internalSecret = mirrorTarget.internalSecret?.trim()
-  if (!apiBaseUrl || !internalSecret) return undefined
+  const userId = mirrorTarget.userId?.trim()
+  if (!apiBaseUrl || (!internalSecret && (!accessToken || !userId))) return undefined
 
   const headers: HeadersInit = {
     "content-type": "application/json",
-    "x-dev3000-workflow-mirror": "1",
-    "x-dev3000-workflow-mirror-secret": internalSecret
+    "x-dev3000-workflow-mirror": "1"
+  }
+
+  if (internalSecret) {
+    headers["x-dev3000-workflow-mirror-secret"] = internalSecret
+  } else if (accessToken) {
+    headers.authorization = `Bearer ${accessToken}`
   }
 
   const response = await fetch(new URL("/api/internal/report-blobs", apiBaseUrl), {
     method: "POST",
     headers,
-    body: JSON.stringify({ pathname, content, contentType: "application/json" }),
+    body: JSON.stringify({ pathname, content, contentType: "application/json", userId }),
     cache: "no-store"
   })
 

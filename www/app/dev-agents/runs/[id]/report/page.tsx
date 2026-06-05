@@ -1655,19 +1655,48 @@ async function WorkflowReportPageData({
 
   const reportJson = await readBlobJson<WorkflowReport>(run.reportBlobUrl)
   if (!reportJson) {
+    const isFailureReport = run.status === "failure"
+    const recentLogs = Array.isArray(run.progressLogs) ? run.progressLogs.slice(-10) : []
+    const failureDetails = isFailureReport ? formatRunFailure(run.error) : null
     const reportLoadFailure = (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="flex items-start gap-3">
             <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
             <div className="min-w-0 flex-1 space-y-2">
-              <div className="text-sm font-medium text-foreground">The final report could not be loaded.</div>
+              <div className="text-sm font-medium text-foreground">
+                {isFailureReport ? "The partial report could not be loaded." : "The final report could not be loaded."}
+              </div>
               <p className="text-sm text-muted-foreground">
-                The run completed, but its stored report is unavailable from the current Blob store.
+                {isFailureReport
+                  ? "The run failed after generating a partial report, but the stored report JSON is unavailable from the current Blob store."
+                  : "The run completed, but its stored report is unavailable from the current Blob store."}
               </p>
+              {failureDetails ? (
+                <>
+                  <p className="text-sm leading-6 text-muted-foreground">{failureDetails.summary}</p>
+                  <details className="pt-1">
+                    <summary className="cursor-pointer text-xs text-muted-foreground underline decoration-[#333] underline-offset-4 hover:text-foreground hover:decoration-[#666]">
+                      Show raw error
+                    </summary>
+                    <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-4 text-xs leading-relaxed text-muted-foreground">
+                      {failureDetails.details}
+                    </pre>
+                  </details>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
+
+        {recentLogs.length > 0 ? (
+          <div className="rounded-lg border border-border bg-card p-5">
+            <div className="mb-3 text-sm font-medium text-foreground">Latest logs</div>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-4 text-xs text-muted-foreground">
+              {recentLogs.join("\n")}
+            </pre>
+          </div>
+        ) : null}
       </div>
     )
 

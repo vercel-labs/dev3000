@@ -69,6 +69,7 @@ export interface WorkflowRunMirrorTarget {
   apiBaseUrl: string
   accessToken?: string
   internalSecret?: string
+  userId?: string
 }
 
 export function getWorkflowMirrorSecret(): string | null {

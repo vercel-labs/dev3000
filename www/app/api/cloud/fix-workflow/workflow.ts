@@ -373,7 +373,8 @@ export async function cloudFixWorkflow(params: {
               ? {
                   apiBaseUrl: controlPlaneBaseUrl,
                   accessToken: controlPlaneAccessToken,
-                  internalSecret: controlPlaneMirrorSecret
+                  internalSecret: controlPlaneMirrorSecret,
+                  userId
                 }
               : undefined,
           activeStepNumber: initialStepNumber,
