@@ -1,0 +1,36 @@
+www/lib/workflow-report-blob.ts
+  s_5da4393566ec36::t_ca2fa0d3442e8a 23,25-26,30-36,42
+www/lib/workflow-report-blob-source.test.ts
+  s_5da4393566ec36::t_28147c5d658322 1-11,15-22
+  s_5da4393566ec36::t_7e2d87d214c4e3 12-14
+www/app/dev-agents/runs/[id]/report/page.tsx
+  s_5da4393566ec36::t_72414e0ce12ab0 1658-1660,1662,1667-1669,1671-1673,1675-1687,1691-1699
+www/app/api/cloud/start-fix/route.ts
+  s_5da4393566ec36::t_ca2fa0d3442e8a 1261-1262
+www/lib/skill-runner-shell-source.ts
+  s_5da4393566ec36::t_5a1f9f6d317371 9
+www/lib/workflow-storage.ts
+  s_5da4393566ec36::t_ca2fa0d3442e8a 72
+www/app/api/cloud/fix-workflow/workflow.ts
+  s_5da4393566ec36::t_ca2fa0d3442e8a 376-377
+www/app/api/internal/report-blobs/route.ts
+  s_5da4393566ec36::t_ca2fa0d3442e8a 1,11,15,21-22,27-31,34,36-40,42-44
+www/lib/skill-runner-shell-source.test.ts
+  s_5da4393566ec36::t_5a1f9f6d317371 73,119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "89ddd9c192fb64532359f339ca123b3ac6ea2283",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
