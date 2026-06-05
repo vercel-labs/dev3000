@@ -13,9 +13,10 @@ import type {
 } from "@/lib/dev-agents"
 
 const ASH_PACKAGE_NAME = "experimental-ash"
-const ASH_PACKAGE_VERSION = "0.3.0-alpha.31"
+const ASH_PACKAGE_VERSION = "0.61.0"
+const ASH_AI_PACKAGE_VERSION = "7.0.0-canary.159"
 const ASH_RUNTIME_VERSION = `${ASH_PACKAGE_NAME}@${ASH_PACKAGE_VERSION}`
-const ASH_ARTIFACT_FORMAT_VERSION = 15
+const ASH_ARTIFACT_FORMAT_VERSION = 16
 
 export interface DevAgentAshArtifact {
   framework: "experimental-ash"
@@ -261,16 +262,18 @@ ${successEval}
 
 function renderAshRuntimeMessageChannel(): string {
   return `import { httpBasic } from "experimental-ash/channels/auth";
-import { httpRoute } from "experimental-ash/channels/http";
+import { ashChannel } from "experimental-ash/channels/ash";
 
 const username = process.env.DEV3000_ASH_RUNTIME_USERNAME || "dev3000";
-const password = process.env.DEV3000_ASH_RUNTIME_PASSWORD;
+const runtimePassword = process.env.DEV3000_ASH_RUNTIME_PASSWORD;
 
-if (!password) {
+if (!runtimePassword) {
   throw new Error("DEV3000_ASH_RUNTIME_PASSWORD is required for the generated Ash runtime route.");
 }
 
-export default httpRoute({
+const password = runtimePassword;
+
+export default ashChannel({
   auth: httpBasic({
     username,
     password,
@@ -280,19 +283,22 @@ export default httpRoute({
 }
 
 function renderAshRuntimeTaskChannel(): string {
-  return `import { defineRoute } from "experimental-ash/channels";
+  return `import { defineChannel, GET, POST } from "experimental-ash/channels";
 import { createUnauthorizedResponse, verifyHttpBasic } from "experimental-ash/channels/auth";
 
 const username = process.env.DEV3000_ASH_RUNTIME_USERNAME || "dev3000";
-const password = process.env.DEV3000_ASH_RUNTIME_PASSWORD;
+const runtimePassword = process.env.DEV3000_ASH_RUNTIME_PASSWORD;
+const healthRoute = "/.well-known/ash/v1/health";
+const taskRoute = "/.well-known/ash/v1/task";
+const streamRoute = "/.well-known/ash/v1/sessions/:sessionId/stream";
 
-if (!password) {
+if (!runtimePassword) {
   throw new Error("DEV3000_ASH_RUNTIME_PASSWORD is required for the generated Ash runtime route.");
 }
 
-export default defineRoute({
-  adapter: { kind: "http" },
-  async fetch(request, ctx) {
+const password = runtimePassword;
+
+function authenticate(request: Request) {
     const auth = verifyHttpBasic(request.headers.get("authorization"), {
       username,
       password,
@@ -303,6 +309,51 @@ export default defineRoute({
         challenges: [{ scheme: "Basic", parameters: { realm: "ash-task" } }],
       });
     }
+
+  return auth.sessionAuth;
+}
+
+function parseStartIndex(request: Request): number | Response | undefined {
+  const value = new URL(request.url).searchParams.get("startIndex");
+  if (value === null) return undefined;
+
+  const startIndex = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(startIndex) || startIndex < 0) {
+    return Response.json({ error: "Expected startIndex to be a non-negative integer.", ok: false }, { status: 400 });
+  }
+
+  return startIndex;
+}
+
+function serializeAsNdjson(stream: ReadableStream<unknown>): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return stream.pipeThrough(
+    new TransformStream<unknown, Uint8Array>({
+      transform(event, controller) {
+        controller.enqueue(encoder.encode(\`\${JSON.stringify(event)}\\n\`));
+      },
+    }),
+  );
+}
+
+export default defineChannel({
+  routes: [
+    GET(healthRoute, async (request) => {
+      const auth = authenticate(request);
+      if (auth instanceof Response) return auth;
+
+      return Response.json(
+        { ok: true, status: "ready" },
+        {
+          headers: {
+            "cache-control": "no-store",
+          },
+        },
+      );
+    }),
+    POST(taskRoute, async (request, { send }) => {
+      const auth = authenticate(request);
+      if (auth instanceof Response) return auth;
 
     let payload: unknown;
     try {
@@ -324,24 +375,20 @@ export default defineRoute({
       return Response.json({ error: "Missing or empty 'message' field.", ok: false }, { status: 400 });
     }
 
-    const shouldAwaitResult = (payload as { awaitResult?: unknown }).awaitResult !== false;
     const continuationToken = \`http-task:\${crypto.randomUUID()}\`;
-    const handle = await ctx.agent.run({
-      adapter: { kind: "http" },
-      auth: auth.sessionAuth,
-      continuationToken,
-      input: { message },
+      const session = await send(message, {
+      auth,
+        continuationToken,
       mode: "task",
     });
 
-    const streamPath = \`/.well-known/ash/v1/sessions/\${encodeURIComponent(handle.sessionId)}/stream\`;
+      const streamPath = \`/.well-known/ash/v1/sessions/\${encodeURIComponent(session.id)}/stream\`;
 
-    if (!shouldAwaitResult) {
       return Response.json(
         {
-          continuationToken: handle.continuationToken,
+          continuationToken: session.continuationToken,
           ok: true,
-          sessionId: handle.sessionId,
+          sessionId: session.id,
           streamPath,
           terminalState: "running",
         },
@@ -352,62 +399,62 @@ export default defineRoute({
           status: 202,
         },
       );
-    }
+    }),
+    GET(streamRoute, async (request, { getSession, params }) => {
+      const auth = authenticate(request);
+      if (auth instanceof Response) return auth;
 
-    try {
-      const result = await handle.result;
-      return Response.json(
-        {
-          continuationToken: handle.continuationToken,
-          ok: true,
-          result,
-          resultText: result.status === "completed" ? result.output : "",
-          sessionId: handle.sessionId,
-          streamPath,
-          terminalState: result.status,
-        },
-        {
+      const sessionId = params.sessionId;
+      if (!sessionId) {
+        return Response.json({ error: "Missing session id.", ok: false }, { status: 400 });
+      }
+
+      const startIndex = parseStartIndex(request);
+      if (startIndex instanceof Response) return startIndex;
+
+      try {
+        const stream = await getSession(sessionId).getEventStream({ startIndex });
+        return new Response(serializeAsNdjson(stream), {
           headers: {
             "cache-control": "no-store",
+            "content-type": "application/x-ndjson; charset=utf-8",
+            "x-ash-session-id": sessionId,
+            "x-ash-stream-format": "ndjson",
+            "x-ash-stream-version": "15",
           },
-          status: 200,
-        },
-      );
-    } catch (error) {
-      console.error("[dev3000 ash task] run failed", error);
-      return Response.json(
-        {
-          continuationToken: handle.continuationToken,
-          error: error instanceof Error ? error.message : String(error),
-          ok: false,
-          sessionId: handle.sessionId,
-          streamPath,
-        },
-        {
-          headers: {
-            "cache-control": "no-store",
-          },
-          status: 500,
-        },
-      );
-    }
-
-  },
+        });
+      } catch {
+        return Response.json({ error: "Session not found.", ok: false }, { status: 404 });
+      }
+    }),
+  ],
 });
 `
 }
 
 function renderGeneratedSandboxDefinition(): string {
-  return `import { execFile } from "node:child_process";
+  return `import { execFile, spawn as spawnProcess } from "node:child_process";
 import { constants } from "node:fs";
 import { access, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { promisify } from "node:util";
-import { defineSandbox, type SandboxCommandResult, type SandboxReadFileOptions, type SandboxSession } from "experimental-ash/sandboxes";
+import {
+  defineSandbox,
+  type SandboxBackend,
+  type SandboxCommandResult,
+  type SandboxProcess,
+  type SandboxReadTextFileOptions,
+  type SandboxRunOptions,
+  type SandboxSession,
+  type SandboxSpawnOptions,
+  type SandboxWriteFileOptions,
+} from "experimental-ash/sandbox";
 
 const projectRoot = process.env.DEV3000_PROJECT_ROOT?.trim();
 const workspaceRoot = "/workspace";
 const execFileAsync = promisify(execFile);
+const templateStoreDir = path.join(process.cwd(), ".dev3000-host-sandbox-templates");
 
 const ensureBunAvailableScript = [
   'set -e',
@@ -428,7 +475,7 @@ const ensureBunAvailableScript = [
 ].join("\\n");
 
 async function ensureBunAvailable(sandbox: SandboxSession) {
-  const result = await sandbox.runCommand(ensureBunAvailableScript);
+  const result = await sandbox.run({ command: ensureBunAvailableScript });
   if (result.exitCode !== 0) {
     const output = [result.stderr, result.stdout].filter(Boolean).join("\\n").trim();
     throw new Error(\`Failed to prepare Bun in ASH sandbox: \${output || "unknown error"}\`);
@@ -457,9 +504,14 @@ function shellEnv(): NodeJS.ProcessEnv {
   };
 }
 
-async function runHostShell(command: string, cwd = workspaceRoot): Promise<SandboxCommandResult> {
+async function runHostShell(
+  command: string,
+  cwd = workspaceRoot,
+  abortSignal?: AbortSignal
+): Promise<SandboxCommandResult> {
   try {
     const { stdout, stderr } = await execFileAsync("bash", ["-lc", command], {
+      signal: abortSignal,
       cwd,
       env: shellEnv(),
       maxBuffer: 10 * 1024 * 1024,
@@ -480,6 +532,48 @@ async function runHostShell(command: string, cwd = workspaceRoot): Promise<Sandb
   }
 }
 
+function emptyReadableStream(): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.close();
+    },
+  });
+}
+
+function bufferToStream(content: Uint8Array): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(content);
+      controller.close();
+    },
+  });
+}
+
+async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      chunks.push(value);
+      byteLength += value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), byteLength);
+}
+
+function nodeStreamToWeb(stream: Readable | null): ReadableStream<Uint8Array> {
+  if (!stream) return emptyReadableStream();
+  return Readable.toWeb(stream) as ReadableStream<Uint8Array>;
+}
+
 function resolveWorkspacePath(input: string): string {
   if (!input || input === ".") {
     return workspaceRoot;
@@ -498,6 +592,10 @@ function resolveWorkspacePath(input: string): string {
   }
 
   return path.join(workspaceRoot, input);
+}
+
+function resolveWorkingDirectory(input?: string): string {
+  return resolveWorkspacePath(input || workspaceRoot);
 }
 
 async function pathExists(input: string): Promise<boolean> {
@@ -535,7 +633,7 @@ async function prepareWorkspace() {
   await symlink(projectRoot, repoPath, "dir");
 }
 
-function sliceTextByLines(text: string, options?: SandboxReadFileOptions): string {
+function sliceTextByLines(text: string, options?: SandboxReadTextFileOptions): string {
   if (!options?.startLine && !options?.endLine) {
     return text;
   }
@@ -546,12 +644,113 @@ function sliceTextByLines(text: string, options?: SandboxReadFileOptions): strin
   return lines.slice(start, end).join("\\n");
 }
 
+function templatePath(templateKey: string): string {
+  return path.join(templateStoreDir, \`\${templateKey.replace(/[^a-zA-Z0-9_-]/g, "-")}.json\`);
+}
+
+async function writeTemplateSeedFiles(
+  templateKey: string,
+  seedFiles: readonly { content: string | Buffer; path: string }[]
+) {
+  await mkdir(templateStoreDir, { recursive: true });
+  await writeFile(
+    templatePath(templateKey),
+    JSON.stringify(
+      {
+        version: 1,
+        seedFiles: seedFiles.map((file) => ({
+          path: file.path,
+          contentBase64: Buffer.from(file.content).toString("base64"),
+        })),
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+async function readTemplateSeedFiles(templateKey: string | null): Promise<Array<{ content: Buffer; path: string }>> {
+  if (!templateKey) return [];
+
+  try {
+    const payload = JSON.parse(await readFile(templatePath(templateKey), "utf8")) as {
+      seedFiles?: Array<{ contentBase64?: unknown; path?: unknown }>;
+      version?: unknown;
+    };
+
+    if (payload.version !== 1 || !Array.isArray(payload.seedFiles)) return [];
+    return payload.seedFiles.flatMap((file) => {
+      if (typeof file.path !== "string" || typeof file.contentBase64 !== "string") return [];
+      return [{ path: file.path, content: Buffer.from(file.contentBase64, "base64") }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function writeSeedFiles(session: SandboxSession, seedFiles: readonly { content: Buffer; path: string }[]) {
+  for (const file of seedFiles) {
+    await session.writeBinaryFile({ path: file.path, content: file.content });
+  }
+}
+
+function spawnHostShell(options: SandboxSpawnOptions): SandboxProcess {
+  const child = spawnProcess("bash", ["-lc", options.command], {
+    cwd: resolveWorkingDirectory(options.workingDirectory),
+    env: shellEnv(),
+    signal: options.abortSignal,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const waitPromise = new Promise<{ exitCode: number }>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code) => {
+      resolve({ exitCode: typeof code === "number" ? code : 1 });
+    });
+  });
+
+  return {
+    stdout: nodeStreamToWeb(child.stdout),
+    stderr: nodeStreamToWeb(child.stderr),
+    async wait() {
+      return waitPromise;
+    },
+    async kill() {
+      child.kill();
+      await waitPromise.catch(() => undefined);
+    },
+  };
+}
+
 function createHostSession(id: string): SandboxSession {
   return {
     id,
-    async readFile(filePath, options) {
+    resolvePath: resolveWorkspacePath,
+    run: (options: SandboxRunOptions) =>
+      runHostShell(options.command, resolveWorkingDirectory(options.workingDirectory), options.abortSignal),
+    spawn: (options: SandboxSpawnOptions) => Promise.resolve(spawnHostShell(options)),
+    async readFile(options) {
       try {
-        const content = await readFile(resolveWorkspacePath(filePath), "utf8");
+        return bufferToStream(await readFile(resolveWorkspacePath(options.path)));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          return null;
+        }
+        throw error;
+      }
+    },
+    async readBinaryFile(options) {
+      try {
+        return await readFile(resolveWorkspacePath(options.path));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          return null;
+        }
+        throw error;
+      }
+    },
+    async readTextFile(options: SandboxReadTextFileOptions) {
+      try {
+        const content = await readFile(resolveWorkspacePath(options.path), "utf8");
         return sliceTextByLines(content, options);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -560,54 +759,52 @@ function createHostSession(id: string): SandboxSession {
         throw error;
       }
     },
-    async readFileBytes(filePath) {
-      try {
-        return await readFile(resolveWorkspacePath(filePath));
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          return null;
-        }
-        throw error;
-      }
-    },
-    resolvePath: resolveWorkspacePath,
-    runCommand: (command) => runHostShell(command),
-    async writeFile(filePath, content) {
-      const resolved = resolveWorkspacePath(filePath);
+    async writeFile(options: SandboxWriteFileOptions) {
+      const resolved = resolveWorkspacePath(options.path);
       await mkdir(path.dirname(resolved), { recursive: true });
-      await writeFile(resolved, content);
+      await writeFile(resolved, await streamToBuffer(options.content));
+    },
+    async writeBinaryFile(options) {
+      const resolved = resolveWorkspacePath(options.path);
+      await mkdir(path.dirname(resolved), { recursive: true });
+      await writeFile(resolved, options.content);
+    },
+    async writeTextFile(options) {
+      const resolved = resolveWorkspacePath(options.path);
+      await mkdir(path.dirname(resolved), { recursive: true });
+      await writeFile(resolved, options.content, { encoding: (options.encoding || "utf8") as BufferEncoding });
+    },
+    async removePath(options) {
+      await rm(resolveWorkspacePath(options.path), {
+        force: options.force,
+        recursive: options.recursive,
+      });
+    },
+    async setNetworkPolicy() {
+      // dev3000's host-backed sandbox runs in the workflow sandbox itself, so network policy is owned by that outer sandbox.
     },
   };
 }
 
-function hostFilesystemBackend() {
+function hostFilesystemBackend(): SandboxBackend {
   return {
     name: "dev3000-host-filesystem",
-    async create(input: {
-      bootstrap?: (session: SandboxSession) => Promise<void> | void;
-      sandboxName: string;
-      seedFiles?: () => Promise<readonly { content: string | Buffer; path: string }[]>;
-      sessionKey: string;
-    }) {
+    async prewarm(input) {
+      await writeTemplateSeedFiles(input.templateKey, input.seedFiles);
+      return { reused: false };
+    },
+    async create(input) {
       await prepareWorkspace();
       const session = createHostSession(input.sessionKey);
-
-      if (input.bootstrap) {
-        await input.bootstrap(session);
-      }
-
-      const seedFiles = input.seedFiles ? await input.seedFiles() : [];
-      for (const file of seedFiles) {
-        await session.writeFile(file.path, file.content);
-      }
+      await writeSeedFiles(session, await readTemplateSeedFiles(input.templateKey));
 
       return {
         session,
+        useSessionFn: async () => session,
         async captureState() {
           return {
             backendName: "dev3000-host-filesystem",
             metadata: { workspaceRoot },
-            sandboxName: input.sandboxName,
             sessionKey: input.sessionKey,
           };
         },
@@ -619,10 +816,11 @@ function hostFilesystemBackend() {
 
 export default defineSandbox({
   backend: hostFilesystemBackend(),
-  async onSession({ sandbox }) {
+  async onSession({ use }) {
+    const sandbox = await use();
     await ensureBunAvailable(sandbox);
 
-    const repoCheck = await sandbox.runCommand("test -d /workspace/repo && test -f /workspace/repo/package.json");
+    const repoCheck = await sandbox.run({ command: "test -d /workspace/repo && test -f /workspace/repo/package.json" });
     if (repoCheck.exitCode !== 0) {
       throw new Error("ASH sandbox workspace is missing /workspace/repo.");
     }
@@ -646,7 +844,18 @@ import { createRequire } from "node:module";
 import path from "node:path";
 
 const require = createRequire(import.meta.url);
-const worldEntry = require.resolve("@workflow/world");
+
+let worldEntry;
+try {
+  worldEntry = require.resolve("@workflow/world");
+} catch (error) {
+  if (error && typeof error === "object" && "code" in error && error.code === "MODULE_NOT_FOUND") {
+    console.log("workflow world-local schema patch skipped: @workflow/world is not installed");
+    process.exit(0);
+  }
+  throw error;
+}
+
 const runsPath = path.join(path.dirname(worldEntry), "runs.js");
 const targets = [runsPath];
 
@@ -743,13 +952,8 @@ Object.defineProperties(model, {
 });
 
 export default defineAgent({
-  name: "${escapeTypeScriptString(input.name.trim())}",
+  description: "${escapeTypeScriptString(input.description.trim())}",
   model,
-  metadata: {
-    dev3000AgentId: "${escapeTypeScriptString(input.id)}",
-    dev3000ExecutionMode: "${escapeTypeScriptString(formatExecutionMode(input.executionMode))}",
-    dev3000SandboxBrowser: "${escapeTypeScriptString(formatSandboxBrowser(input.sandboxBrowser))}",
-  },
 });
 `
 }
@@ -967,7 +1171,7 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
             typecheck: "tsgo"
           },
           dependencies: {
-            ai: "^6.0.159",
+            ai: ASH_AI_PACKAGE_VERSION,
             [ASH_PACKAGE_NAME]: ASH_PACKAGE_VERSION,
             zod: "^4.3.6"
           },
@@ -1009,27 +1213,27 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
       content: renderGeneratedAgentDefinition(input)
     },
     {
-      path: "agent/system.md",
+      path: "agent/instructions.md",
       content: systemPrompt
     },
     {
-      path: "agent/system/runtime-contract.md",
+      path: "agent/instructions/runtime-contract.md",
       content: renderRuntimeContractLayer(input)
     },
     {
-      path: "agent/system/evaluation.md",
+      path: "agent/instructions/evaluation.md",
       content: renderEvaluationLayer(input)
     },
     {
-      path: "agent/system/skills.md",
+      path: "agent/instructions/skills.md",
       content: renderSkillsLayer(input)
     },
     {
-      path: "agent/channels/.well-known/ash/v1/message.ts",
+      path: "agent/channels/ash.ts",
       content: renderAshRuntimeMessageChannel()
     },
     {
-      path: "agent/channels/.well-known/ash/v1/task.ts",
+      path: "agent/channels/dev3000.ts",
       content: renderAshRuntimeTaskChannel()
     },
     {
