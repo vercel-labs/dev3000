@@ -1,0 +1,35 @@
+www/lib/dev-agent-ash-spec.ts
+  s_5da4393566ec36::t_c61201f49b695c 955
+  s_5da4393566ec36::t_2a6cd85dee9c20 436,440,442-452,457,478,507-511,514,535-576,597-598,647-723,727-731,733,741,743,751-768,770-773,776-784,789,792-796,799,803,819-820,823
+  s_5da4393566ec36::t_71a30d9871fbd7 636
+  s_5da4393566ec36::t_0adaa7058b1ef8 1174,1216,1220,1224,1228,1232,1236
+  s_5da4393566ec36::t_6fca2b7e3270a2 268,270,274-275,290,295,299,775
+  s_5da4393566ec36::t_3c70a9a2b5be0f 17,19
+  s_5da4393566ec36::t_0627d0c5bf1cfa 265,276,286,291-293,301,313-357,379-381,385,389,391,402-410,412-417,420-423,425-430
+  s_5da4393566ec36::t_285ded98a54c33 16
+  s_5da4393566ec36::t_1af618e83c34fa 847-858
+www/app/api/cloud/fix-workflow/steps.ts
+  s_5da4393566ec36::t_d358fd11f14ebd 7360
+  s_5da4393566ec36::t_90526a13507ba1 7499
+www/lib/skill-runner-ash-runtime-source.test.ts
+  s_5da4393566ec36::t_be7840f9e6125b 1-18
+www/lib/dev-agent-ash-spec.test.ts
+  s_5da4393566ec36::t_285ded98a54c33 6,28
+  s_5da4393566ec36::t_ee8e401b1afdf6 7-27,29-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "62c630f878a05d9fa49a8052f76cbe5bb4f81cf6",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
