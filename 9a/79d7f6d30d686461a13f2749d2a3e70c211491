@@ -1,0 +1,25 @@
+packages/d3k-darwin-arm64/package.json
+  s_f55a1c243c82b6::t_a00377fed40132 3
+packages/d3k-linux-x64/package.json
+  s_f55a1c243c82b6::t_a00377fed40132 3
+package.json
+  s_f55a1c243c82b6::t_a00377fed40132 3,71-73
+packages/d3k-windows-x64/package.json
+  s_f55a1c243c82b6::t_a00377fed40132 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "9a79d7f6d30d686461a13f2749d2a3e70c211491",
+  "prompts": {},
+  "sessions": {
+    "s_f55a1c243c82b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019edaa4-65e8-78a1-90b2-b1622880ca98",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
