@@ -65,7 +65,7 @@
     "husky": "^9.0.0",
     "tsx": "^4.20.3",
     "typescript": "^5.0.0",
-    "vitest": "4.0.18"
+    "vitest": "4.1.0"
   },
   "optionalDependencies": {
     "@d3k/darwin-arm64": "0.0.177-canary",
@@ -85,5 +85,8 @@
   "packageManager": "bun@1.2.5",
   "workspaces": [
     "www"
-  ]
+  ],
+  "overrides": {
+    "postcss": "8.5.15"
+  }
 }
