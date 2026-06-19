@@ -1,0 +1,35 @@
+.gitignore
+  s_f55a1c243c82b6::t_ecefa8d1754c4c 25-28
+src/utils/browser-command-argv.test.ts
+  s_f55a1c243c82b6::t_5b92cb389f7f32 2-8,46-87
+src/cli.ts
+  s_f55a1c243c82b6::t_ec81a6f61537bf 86-89,110-133,138-141,159-169,171-189,192-200,204,225-230
+  s_f55a1c243c82b6::t_c34dd139dca472 1449-1451
+  s_f55a1c243c82b6::t_ddb7545ad98938 142,191
+skills/d3k/SKILL.md
+  s_f55a1c243c82b6::t_6e295e735f87b6 16-31,85,91,93,114,147,153
+  s_f55a1c243c82b6::t_b543b0a4c6aeb3 128,199
+  s_f55a1c243c82b6::t_2645f68a174f20 3,13,48-53,60-84,86-89,142,144
+  s_f55a1c243c82b6::t_19e3e5f9fad44e 161,167
+src/utils/browser-command-argv.ts
+  s_f55a1c243c82b6::t_62631d4456e8ef 3-57,79-85,116-183
+src/skills/d3k/internal-skill.md
+  s_f55a1c243c82b6::t_7b0f904e310e98 99
+  s_f55a1c243c82b6::t_546c76ae15d544 32-47,50,53,60,62,64,85,126,135,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "2b2c8dd25873f5f21e74359bb903d70e237d8f25",
+  "prompts": {},
+  "sessions": {
+    "s_f55a1c243c82b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019edaa4-65e8-78a1-90b2-b1622880ca98",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
