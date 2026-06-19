@@ -22,7 +22,10 @@ mcp-server/.next/*
 !.agents/skills/deepsec/SKILL.md
 .mcp.json
 next-devtools-mcp/
-.vercel
+
+# Vercel project link metadata is local to each checkout/app.
+.vercel/
+**/.vercel/
 .env*.local
 *.tsbuildinfo
 

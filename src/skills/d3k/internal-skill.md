@@ -29,23 +29,39 @@ d3k crawl               # Discover app URLs
 d3k crawl --depth all   # Exhaustive crawl
 ```
 
+## Auth-Sensitive Browser Rule
+
+For Google OAuth, Supabase auth, and any other auth-sensitive debugging, d3k must own browser startup. Start d3k normally so it launches the app and browser together, including `--app-url` when the target URL is known.
+
+Do not use `d3k agent-browser --profile ... --headed open ...`, raw Chrome, Playwright, browser MCP sessions, manual CDP attachment, or any other separate automation browser for auth debugging unless the user explicitly asks for that path. Agent-browser-created/custom Chrome profiles can be rejected by Google with `This browser or app may not be secure`.
+
+After d3k has launched the browser, use the safe managed-browser path:
+```bash
+d3k agent-browser --require-d3k-browser open "<url>"
+d3k agent-browser snapshot -i
+d3k agent-browser click @e1
+d3k errors --context
+```
+
+If this fails because no d3k-managed browser exists, restart d3k cleanly with its normal browser-owning flow. Do not fall back to creating a new agent-browser Chrome for auth.
+
 ## Browser Interaction
 
-`d3k agent-browser` auto-connects to the active session's browser via CDP:
+`d3k agent-browser` auto-connects to the active d3k-managed browser session:
 
 ```bash
-d3k agent-browser open http://localhost:3000/page
+d3k agent-browser --require-d3k-browser open http://localhost:3000/page
 d3k agent-browser snapshot -i    # Get element refs (@e1, @e2)
 d3k agent-browser click @e2
 d3k agent-browser fill @e3 "text"
 d3k agent-browser screenshot /tmp/shot.png
 ```
 
-To target a different browser, run `d3k agent-browser connect <port>` first.
+`--require-d3k-browser` fails instead of creating a new browser when no d3k-managed browser exists. To target a different browser, run `d3k agent-browser connect <port>` first only when explicitly requested.
 
-## Codex Fresh Browser/Profile Startup
+## Non-Auth Fresh Browser/Profile Startup
 
-Use this workflow when the user asks Codex to start d3k with a fresh browser/profile.
+Use this workflow only for non-auth debugging when the user asks Codex to start d3k with a fresh browser/profile. Do not use it for Google OAuth, Supabase auth, or any sign-in flow that may reject automation browsers.
 
 1. Close any stale `agent-browser` daemon before launching with `--profile`. Otherwise `agent-browser` will reuse the existing daemon and print `--profile ignored`.
    ```bash
@@ -66,7 +82,7 @@ Use this workflow when the user asks Codex to start d3k with a fresh browser/pro
 
 4. Open the fresh profile as a separate browser step:
    ```bash
-   d3k agent-browser --profile /tmp/d3k-fresh-profile --headed open http://127.0.0.1:3000
+   d3k agent-browser --allow-new-browser --profile /tmp/d3k-fresh-profile --headed open http://127.0.0.1:3000
    ```
 
 5. Sanity-check the opened page:
@@ -80,7 +96,7 @@ Practical rules:
 
 - Prefer `127.0.0.1` for this workflow. If `localhost` hangs or flips between IPv4/IPv6 behavior, do not keep retrying browser launches.
 - If `curl -I` hangs, the server is wedged even if the port appears occupied; restart the d3k server process before opening a browser.
-- In `servers-only` mode there is no d3k-monitored CDP browser. Use regular `d3k agent-browser` commands, not `d3k cdp-port`.
+- In `servers-only` mode there is no d3k-managed browser. Use `--allow-new-browser` only for the explicit non-auth fresh-profile open step; do not use `d3k cdp-port`.
 - In sandboxed agent environments, rerun local-network checks and `agent-browser` opens outside the sandbox when sandbox networking blocks access to `127.0.0.1`.
 
 ## Browser Tool Choice
@@ -107,7 +123,7 @@ d3k --browser-tool agent-browser
 
 1. `d3k errors --context` - See errors and what triggered them
 2. Fix the code
-3. `d3k agent-browser open <url>` then `d3k agent-browser click @e1` to replay
+3. `d3k agent-browser --require-d3k-browser open <url>` then `d3k agent-browser click @e1` to replay
 4. `d3k errors` - Verify fix worked
 
 ## Creating PRs with Before/After Screenshots
@@ -116,13 +132,13 @@ When creating a PR for visual changes, **always capture before/after screenshots
 
 1. **Before making changes**, screenshot the production site:
    ```bash
-   d3k agent-browser open https://production-url.com/affected-page
+   d3k agent-browser --require-d3k-browser open https://production-url.com/affected-page
    d3k agent-browser screenshot /tmp/before.png
    ```
 
 2. **After making changes**, screenshot localhost:
    ```bash
-   d3k agent-browser open http://localhost:3000/affected-page
+   d3k agent-browser --require-d3k-browser open http://localhost:3000/affected-page
    d3k agent-browser screenshot /tmp/after.png
    ```
 

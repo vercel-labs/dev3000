@@ -83,6 +83,10 @@ function findAgentBrowser(): string {
 
 function getSessionCdpPort(): string | null {
   const session = findCurrentSession()
+  return getSessionCdpPortForSession(session)
+}
+
+function getSessionCdpPortForSession(session: ReturnType<typeof findCurrentSession>): string | null {
   const cdpUrl = session?.cdpUrl
   if (!cdpUrl) {
     return null
@@ -103,14 +107,39 @@ function getSessionCdpPort(): string | null {
   return null
 }
 
+function printUnsafeAgentBrowserOpenError(reason: string, hasActiveSession: boolean) {
+  const sessionHint = hasActiveSession
+    ? "The active d3k session has no usable d3k-managed browser. This usually means d3k was started with --servers-only, browser startup failed, or the session is stale."
+    : "No active d3k session with a managed browser was found."
+
+  console.error(
+    [
+      "Refusing to run `d3k agent-browser open` because it would create or use an agent-browser-managed browser instead of d3k's active browser.",
+      "",
+      reason,
+      sessionHint,
+      "",
+      "For OAuth/auth debugging, start d3k normally so it launches the app and browser together:",
+      '  d3k --no-agent --command "<dev command>" --port <port> --startup-timeout <seconds> --no-tui --app-url "<url>"',
+      "",
+      "Then navigate the d3k-managed browser with:",
+      '  d3k agent-browser --require-d3k-browser open "<url>"',
+      "",
+      "For an explicit non-auth standalone/fresh-profile browser, pass:",
+      '  d3k agent-browser --allow-new-browser open "<url>"'
+    ].join("\n")
+  )
+}
+
 function runLocalBrowserTool(args: string[]) {
   const env = { ...process.env }
   ensureCommandPath(env)
 
-  const subcommandIndex = args.findIndex(
-    (arg: string) => !arg.startsWith("-") && !arg.startsWith("@") && arg !== "9222"
-  )
-  const subcommand = subcommandIndex >= 0 ? args[subcommandIndex] : null
+  const invocation = parseAgentBrowserInvocationArgs(args)
+  const toolArgs = invocation.args
+  const subcommand = invocation.subcommand
+  const hasExplicitCdp = hasAgentBrowserOption(toolArgs, "--cdp")
+  const hasProfile = hasAgentBrowserOption(toolArgs, "--profile") || hasAgentBrowserOption(toolArgs, "--profile-dir")
 
   if (subcommand === "errors") {
     console.log("\x1b[33m💡 Tip: Using `d3k errors` instead (shows browser + server errors)\x1b[0m\n")
@@ -127,21 +156,52 @@ function runLocalBrowserTool(args: string[]) {
   }
 
   const binaryPath = findAgentBrowser()
+  const openNeedsD3kBrowser = isAgentBrowserOpenCommand(subcommand) && !invocation.allowNewBrowser && !hasExplicitCdp
 
-  if (
-    subcommand !== "connect" &&
-    subcommand !== "close" &&
-    !args.includes("--cdp") &&
-    !args.includes("--profile") &&
-    !args.includes("--profile-dir")
-  ) {
-    const cdpPort = getSessionCdpPort()
-    if (cdpPort) {
-      spawnSync(binaryPath, ["connect", cdpPort], { stdio: "pipe", env, shell: false })
+  if (invocation.allowNewBrowser && invocation.requireD3kBrowser) {
+    console.error("`--allow-new-browser` and `--require-d3k-browser` cannot be used together.")
+    process.exit(1)
+  }
+
+  if (invocation.requireD3kBrowser && hasExplicitCdp) {
+    console.error("`--require-d3k-browser` uses the active d3k session. Remove `--cdp` or use `--allow-new-browser`.")
+    process.exit(1)
+  }
+
+  const activeSession = findCurrentSession()
+  const sessionCdpPort = getSessionCdpPortForSession(activeSession)
+  const needsD3kBrowser = invocation.requireD3kBrowser || openNeedsD3kBrowser
+
+  if (needsD3kBrowser && hasProfile) {
+    printUnsafeAgentBrowserOpenError(
+      "`--profile` and `--profile-dir` make agent-browser use its own browser profile instead of d3k's active browser.",
+      activeSession !== null
+    )
+    process.exit(1)
+  }
+
+  if (needsD3kBrowser && !sessionCdpPort) {
+    printUnsafeAgentBrowserOpenError(
+      "Opening a URL without a d3k-managed browser would launch a new automation browser, which can break Google OAuth/Supabase auth with `This browser or app may not be secure`.",
+      activeSession !== null
+    )
+    process.exit(1)
+  }
+
+  if (subcommand !== "connect" && subcommand !== "close" && !hasExplicitCdp && !hasProfile) {
+    if (sessionCdpPort) {
+      const connectResult = spawnSync(binaryPath, ["connect", sessionCdpPort], { stdio: "pipe", env, shell: false })
+      if (needsD3kBrowser && connectResult.status !== 0) {
+        printUnsafeAgentBrowserOpenError(
+          "d3k found a browser session, but agent-browser could not connect to it.",
+          activeSession !== null
+        )
+        process.exit(connectResult.status ?? 1)
+      }
     }
   }
 
-  const result = spawnSync(binaryPath, args, {
+  const result = spawnSync(binaryPath, toolArgs, {
     stdio: "pipe",
     env,
     shell: false
@@ -162,7 +222,12 @@ function runLocalBrowserTool(args: string[]) {
   process.exit(result.status ?? 1)
 }
 
-import { getBrowserCommandInvocation } from "./utils/browser-command-argv.js"
+import {
+  getBrowserCommandInvocation,
+  hasAgentBrowserOption,
+  isAgentBrowserOpenCommand,
+  parseAgentBrowserInvocationArgs
+} from "./utils/browser-command-argv.js"
 
 const browserCommandInvocation = getBrowserCommandInvocation(process.argv.slice(2))
 
@@ -1381,7 +1446,9 @@ program
 // Actual handling happens at the top of the file before Commander runs
 program
   .command("agent-browser [args...]")
-  .description("Run the bundled agent-browser CLI (e.g., d3k agent-browser screenshot /tmp/foo.png)")
+  .description(
+    "Run the bundled agent-browser CLI. `open` requires d3k's managed browser unless --allow-new-browser is passed."
+  )
   .allowUnknownOption(true)
 
 // Skill command - get skill content for use in prompts/workflows
