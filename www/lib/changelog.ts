@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.177",
+    date: "2026-06-19",
+    type: "patch",
+    highlights: [
+      "Fix Dependabot dependency alerts",
+      "Guard d3k auth browser flows",
+      "Fix skill run report blob mirroring",
+      "Update generated ASH runner to 0.61",
+      "Require mirror secret for report blob writes"
+    ]
+  },
+
+  {
     version: "0.0.176",
     date: "2026-05-26",
     type: "minor",

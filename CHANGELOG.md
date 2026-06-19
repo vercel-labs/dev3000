@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.177] - 2026-06-19
+
+**Patch Release**
+
+- Fix Dependabot dependency alerts
+- Guard d3k auth browser flows
+- Fix skill run report blob mirroring
+- Update generated ASH runner to 0.61
+- Require mirror secret for report blob writes
+
 ## [0.0.176] - 2026-05-26
 
 **Feature Release**

@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.177-canary",
+  "version": "0.0.177",
   "description": "AI-powered development tools with browser monitoring and skill integration",
   "type": "module",
   "main": "dist/index.js",
@@ -68,9 +68,9 @@
     "vitest": "4.1.0"
   },
   "optionalDependencies": {
-    "@d3k/darwin-arm64": "0.0.177-canary",
-    "@d3k/linux-x64": "0.0.177-canary",
-    "@d3k/windows-x64": "0.0.177-canary",
+    "@d3k/darwin-arm64": "0.0.177",
+    "@d3k/linux-x64": "0.0.177",
+    "@d3k/windows-x64": "0.0.177",
     "@opentui/core-linux-x64": "0.1.86"
   },
   "engines": {
