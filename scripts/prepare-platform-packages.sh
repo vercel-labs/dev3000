@@ -25,6 +25,13 @@ cp -r "$LINUX_X64_DIST_DIR/bin" "$LINUX_X64_PKG_DIR/"
 cp -r "$LINUX_X64_DIST_DIR/skills" "$LINUX_X64_PKG_DIR/"
 cp -r "$LINUX_X64_DIST_DIR/src" "$LINUX_X64_PKG_DIR/"
 
+LINUX_ARM64_PKG_DIR="packages/d3k-linux-arm64"
+LINUX_ARM64_DIST_DIR="dist-bin/d3k-linux-arm64"
+rm -rf "$LINUX_ARM64_PKG_DIR/bin" "$LINUX_ARM64_PKG_DIR/skills" "$LINUX_ARM64_PKG_DIR/src"
+cp -r "$LINUX_ARM64_DIST_DIR/bin" "$LINUX_ARM64_PKG_DIR/"
+cp -r "$LINUX_ARM64_DIST_DIR/skills" "$LINUX_ARM64_PKG_DIR/"
+cp -r "$LINUX_ARM64_DIST_DIR/src" "$LINUX_ARM64_PKG_DIR/"
+
 WINDOWS_X64_PKG_DIR="packages/d3k-windows-x64"
 WINDOWS_X64_DIST_DIR="dist-bin/d3k-windows-x64"
 rm -rf "$WINDOWS_X64_PKG_DIR/bin" "$WINDOWS_X64_PKG_DIR/skills" "$WINDOWS_X64_PKG_DIR/src"

@@ -21,9 +21,9 @@ const require = createRequire(import.meta.url)
 const PLATFORMS = {
   "darwin-arm64": "@d3k/darwin-arm64",
   "linux-x64": "@d3k/linux-x64",
+  "linux-arm64": "@d3k/linux-arm64",
   "win32-x64": "@d3k/windows-x64",
   // "darwin-x64": "@d3k/darwin-x64",  // Add later
-  // "linux-arm64": "@d3k/linux-arm64", // Add later
 }
 
 function findBinary() {
@@ -32,7 +32,7 @@ function findBinary() {
 
   if (!pkgName) {
     console.error(`\n  Unsupported platform: ${key}`)
-    console.error(`  Currently supported platforms: macOS ARM64 (Apple Silicon), Linux x64, Windows x64`)
+    console.error(`  Currently supported platforms: macOS ARM64 (Apple Silicon), Linux x64, Linux ARM64, Windows x64`)
     console.error(`\n  For other platforms, please open an issue at:`)
     console.error(`  https://github.com/vercel-labs/dev3000/issues\n`)
     process.exit(1)

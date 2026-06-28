@@ -12,9 +12,11 @@ const target =
     ? "d3k-darwin-arm64"
     : platform === "linux" && arch === "x64"
       ? "d3k-linux-x64"
-      : platform === "win32" && arch === "x64"
-        ? "d3k-windows-x64"
-        : null
+      : platform === "linux" && arch === "arm64"
+        ? "d3k-linux-arm64"
+        : platform === "win32" && arch === "x64"
+          ? "d3k-windows-x64"
+          : null
 
 if (!target) {
   console.error(`Unsupported platform for canary smoke test: ${platform}-${arch}`)

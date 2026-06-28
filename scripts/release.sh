@@ -49,6 +49,7 @@ node -e "
     pkg.optionalDependencies = pkg.optionalDependencies || {};
     pkg.optionalDependencies['@d3k/darwin-arm64'] = '$NEXT_VERSION';
     pkg.optionalDependencies['@d3k/linux-x64'] = '$NEXT_VERSION';
+    pkg.optionalDependencies['@d3k/linux-arm64'] = '$NEXT_VERSION';
     pkg.optionalDependencies['@d3k/windows-x64'] = '$NEXT_VERSION';
     fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
@@ -57,7 +58,7 @@ node -e "
 echo "⬆️ Updating platform package versions to $NEXT_VERSION..."
 node -e "
     const fs = require('fs');
-    ['packages/d3k-darwin-arm64/package.json', 'packages/d3k-linux-x64/package.json', 'packages/d3k-windows-x64/package.json'].forEach(pkgPath => {
+    ['packages/d3k-darwin-arm64/package.json', 'packages/d3k-linux-x64/package.json', 'packages/d3k-linux-arm64/package.json', 'packages/d3k-windows-x64/package.json'].forEach(pkgPath => {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
         pkg.version = '$NEXT_VERSION';
         fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
@@ -89,6 +90,16 @@ node -e "
     lockfile = lockfile.replace(
         /'@d3k\/linux-x64@[^']+'/g,
         \"'@d3k/linux-x64@$NEXT_VERSION'\"
+    );
+
+    // Update linux-arm64
+    lockfile = lockfile.replace(
+        /('@d3k\/linux-arm64':\n\s+specifier: )[^\n]+(\n\s+version: )[^\n]+/,
+        \"\\\$1$NEXT_VERSION\\\$2$NEXT_VERSION\"
+    );
+    lockfile = lockfile.replace(
+        /'@d3k\/linux-arm64@[^']+'/g,
+        \"'@d3k/linux-arm64@$NEXT_VERSION'\"
     );
 
     // Update windows-x64
@@ -143,7 +154,7 @@ bun scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json packages/d3k-windows-x64/package.json www/package.json www/lib/changelog.ts CHANGELOG.md bun.lock
+git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json packages/d3k-linux-arm64/package.json packages/d3k-windows-x64/package.json www/package.json www/lib/changelog.ts CHANGELOG.md bun.lock
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)

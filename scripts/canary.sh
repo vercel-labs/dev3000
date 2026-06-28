@@ -47,6 +47,16 @@ if has_target "linux-x64"; then
   cp -r "$LINUX_X64_DIST_DIR/src" "$LINUX_X64_PKG_DIR/"
 fi
 
+# linux-arm64
+LINUX_ARM64_PKG_DIR="$ROOT_DIR/packages/d3k-linux-arm64"
+LINUX_ARM64_DIST_DIR="$ROOT_DIR/dist-bin/d3k-linux-arm64"
+if has_target "linux-arm64"; then
+  rm -rf "$LINUX_ARM64_PKG_DIR/bin" "$LINUX_ARM64_PKG_DIR/skills" "$LINUX_ARM64_PKG_DIR/src"
+  cp -r "$LINUX_ARM64_DIST_DIR/bin" "$LINUX_ARM64_PKG_DIR/"
+  cp -r "$LINUX_ARM64_DIST_DIR/skills" "$LINUX_ARM64_PKG_DIR/"
+  cp -r "$LINUX_ARM64_DIST_DIR/src" "$LINUX_ARM64_PKG_DIR/"
+fi
+
 # windows-x64
 WINDOWS_X64_PKG_DIR="$ROOT_DIR/packages/d3k-windows-x64"
 WINDOWS_X64_DIST_DIR="$ROOT_DIR/dist-bin/d3k-windows-x64"
