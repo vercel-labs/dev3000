@@ -1,0 +1,20 @@
+README.md
+  s_2f6afbb3e883fc::t_bed99109a6ebea 88,95,101-117
+  s_2f6afbb3e883fc::t_7d26b3704ad6bb 118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "326b6f28dcd9f24433cad7194005edd4f3618edf",
+  "prompts": {},
+  "sessions": {
+    "s_2f6afbb3e883fc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ee2f2-fbab-7140-92c9-9d21e3ab049f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
