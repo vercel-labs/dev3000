@@ -124,7 +124,7 @@ const METRIC_DEFINITIONS: MetricDefinition[] = [
 ]
 
 const REPORT_STEP_LABELS = [
-  "Creating or reusing ASH app",
+  "Creating or reusing EVE app",
   "Creating sandbox",
   "Capturing baseline",
   "Agent in progress",

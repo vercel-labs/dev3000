@@ -1,19 +1,19 @@
 import { gzipSync } from "node:zlib"
 import { head } from "@vercel/blob"
 import { buildBlobProxyUrl, putBlobAndBuildUrl } from "@/lib/blob-store"
-import type { DevAgentAshArtifact, DevAgentAshInput } from "@/lib/dev-agent-ash-spec"
-import { createDevAgentAshSource } from "@/lib/dev-agent-ash-spec"
+import type { DevAgentEveArtifact, DevAgentEveInput } from "@/lib/dev-agent-eve-spec"
+import { createDevAgentEveSource } from "@/lib/dev-agent-eve-spec"
 
-const ASH_ARTIFACT_PREFIX = "dev-agents/ash/"
-const ASH_ARTIFACT_CACHE_PREFIX = `${ASH_ARTIFACT_PREFIX}cache/`
+const EVE_ARTIFACT_PREFIX = "dev-agents/eve/"
+const EVE_ARTIFACT_CACHE_PREFIX = `${EVE_ARTIFACT_PREFIX}cache/`
 
 const TAR_BLOCK_SIZE = 512
 
-export type DevAgentAshArtifactPublishState = "stored" | "reused"
+export type DevAgentEveArtifactPublishState = "stored" | "reused"
 
-export interface DevAgentAshArtifactPublishResult {
-  artifact: DevAgentAshArtifact
-  publishState: DevAgentAshArtifactPublishState
+export interface DevAgentEveArtifactPublishResult {
+  artifact: DevAgentEveArtifact
+  publishState: DevAgentEveArtifactPublishState
 }
 
 function encodeTarString(value: string, length: number): Buffer {
@@ -50,7 +50,7 @@ function splitTarPath(pathname: string): { name: string; prefix: string } {
     }
   }
 
-  throw new Error(`ASH artifact path is too long for tar header: ${pathname}`)
+  throw new Error(`EVE artifact path is too long for tar header: ${pathname}`)
 }
 
 function createTarHeader(pathname: string, size: number, mtime: number): Buffer {
@@ -103,15 +103,15 @@ function createTarGzBuffer(rootFolder: string, files: Array<{ path: string; cont
   return gzipSync(Buffer.concat(chunks))
 }
 
-export async function publishDevAgentAshArtifactWithStatus(
-  input: DevAgentAshInput,
+export async function publishDevAgentEveArtifactWithStatus(
+  input: DevAgentEveInput,
   revision: number
-): Promise<DevAgentAshArtifactPublishResult> {
-  const source = await createDevAgentAshSource(input, revision)
-  const cachePath = `${ASH_ARTIFACT_CACHE_PREFIX}${source.specHash}.tgz`
+): Promise<DevAgentEveArtifactPublishResult> {
+  const source = await createDevAgentEveSource(input, revision)
+  const cachePath = `${EVE_ARTIFACT_CACHE_PREFIX}${source.specHash}.tgz`
 
   let tarballUrl: string
-  let publishState: DevAgentAshArtifactPublishState = "stored"
+  let publishState: DevAgentEveArtifactPublishState = "stored"
 
   try {
     const cachedBlob = await head(cachePath)
@@ -131,7 +131,7 @@ export async function publishDevAgentAshArtifactWithStatus(
 
   return {
     artifact: {
-      framework: "experimental-ash",
+      framework: "eve",
       revision,
       specHash: source.specHash,
       generatedAt: new Date().toISOString(),
@@ -147,10 +147,10 @@ export async function publishDevAgentAshArtifactWithStatus(
   }
 }
 
-export async function publishDevAgentAshArtifact(
-  input: DevAgentAshInput,
+export async function publishDevAgentEveArtifact(
+  input: DevAgentEveInput,
   revision: number
-): Promise<DevAgentAshArtifact> {
-  const { artifact } = await publishDevAgentAshArtifactWithStatus(input, revision)
+): Promise<DevAgentEveArtifact> {
+  const { artifact } = await publishDevAgentEveArtifactWithStatus(input, revision)
   return artifact
 }

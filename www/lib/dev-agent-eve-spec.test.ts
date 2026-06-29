@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { createDevAgentAshSource } from "./dev-agent-ash-spec"
+import { createDevAgentEveSource } from "./dev-agent-eve-spec"
 
-describe("createDevAgentAshSource", () => {
-  it("generates an ASH 0.61-compatible runner package", async () => {
-    const source = await createDevAgentAshSource(
+describe("createDevAgentEveSource", () => {
+  it("generates an Eve-compatible runner package", async () => {
+    const source = await createDevAgentEveSource(
       {
         id: "vercel-optimize",
         name: "Vercel Optimize",
@@ -22,24 +22,24 @@ describe("createDevAgentAshSource", () => {
       dependencies?: Record<string, string>
     }
     const sandbox = source.files.find((file) => file.path === "agent/sandbox/sandbox.ts")?.content || ""
-    const ashChannel = source.files.find((file) => file.path === "agent/channels/ash.ts")?.content || ""
+    const eveChannel = source.files.find((file) => file.path === "agent/channels/eve.ts")?.content || ""
     const dev3000Channel = source.files.find((file) => file.path === "agent/channels/dev3000.ts")?.content || ""
 
-    expect(packageJson.dependencies?.["experimental-ash"]).toBe("0.61.0")
-    expect(packageJson.dependencies?.ai).toBe("7.0.0-canary.159")
+    expect(packageJson.dependencies?.eve).toBe("0.17.0")
+    expect(packageJson.dependencies?.ai).toBe("^7.0.0")
     expect(source.files.some((file) => file.path === "agent/instructions.md")).toBe(true)
     expect(source.files.some((file) => file.path.startsWith("agent/system"))).toBe(false)
-    expect(ashChannel).toContain('from "experimental-ash/channels/ash"')
+    expect(eveChannel).toContain('from "eve/channels/eve"')
     expect(dev3000Channel).toContain("defineChannel")
-    expect(dev3000Channel).toContain('"/.well-known/ash/v1/task"')
-    expect(sandbox).toContain('from "experimental-ash/sandbox"')
+    expect(dev3000Channel).toContain('"/eve/v1/dev3000/task"')
+    expect(sandbox).toContain('from "eve/sandbox"')
     expect(sandbox).toContain("sandbox.run({ command:")
     expect(sandbox).not.toContain("runCommand")
-    expect(sandbox).not.toContain("experimental-ash/sandboxes")
+    expect(sandbox).not.toContain("eve/sandboxes")
   })
 
   it("disables planning-only todo tool in generated automation packages", async () => {
-    const source = await createDevAgentAshSource(
+    const source = await createDevAgentEveSource(
       {
         id: "vercel-optimize",
         name: "Vercel Optimize",

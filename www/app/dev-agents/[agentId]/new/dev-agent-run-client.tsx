@@ -1143,9 +1143,9 @@ export default function DevAgentRunClient({
           <span className="text-[13px] text-[#888]">
             {formatExecutionMode(devAgent.executionMode, devAgent.supportsPullRequest)}
           </span>
-          {devAgent.ashArtifact?.revision ? (
+          {devAgent.eveArtifact?.revision ? (
             <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#666]">
-              v{devAgent.ashArtifact.revision}
+              v{devAgent.eveArtifact.revision}
             </span>
           ) : null}
           {devAgent.sandboxBrowser !== "none" ? (

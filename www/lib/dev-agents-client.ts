@@ -30,10 +30,11 @@ export interface DevAgentSkillRef {
   sourceUrl?: string
 }
 
-export interface DevAgentAshCompiledSpec {
+export interface DevAgentEveCompiledSpec {
   schemaVersion: number
   artifactFormatVersion: number
-  ashRuntimeVersion: string
+  eveRuntimeVersion?: string
+  ashRuntimeVersion?: string
   createdAt: string
   id: string
   name: string
@@ -72,8 +73,8 @@ export interface DevAgentAshCompiledSpec {
   earlyExitPlacementIndex: number | null
 }
 
-export interface DevAgentAshArtifact {
-  framework: "experimental-ash"
+export interface DevAgentEveArtifact {
+  framework: "eve"
   revision: number
   specHash: string
   generatedAt: string
@@ -82,7 +83,7 @@ export interface DevAgentAshArtifact {
   sourceLabel: string
   systemPrompt: string
   packagedSkills?: string[]
-  compiledSpec?: DevAgentAshCompiledSpec
+  compiledSpec?: DevAgentEveCompiledSpec
   tarballUrl?: string
 }
 
@@ -152,7 +153,7 @@ export interface DevAgent {
   earlyExitEval?: string
   earlyExitRule?: DevAgentEarlyExitRule
   earlyExitPlacementIndex?: number
-  ashArtifact?: DevAgentAshArtifact
+  eveArtifact?: DevAgentEveArtifact
   runnerCanonicalPath?: string
   runnerSourceUrl?: string
   runnerSourceKind?: "default" | "imported"

@@ -1,6 +1,6 @@
 import { list } from "@vercel/blob"
 import { putBlobAndBuildUrl, readBlobJson as readStoredBlobJson } from "@/lib/blob-store"
-import { createDevAgentAshArtifactDescriptor } from "@/lib/dev-agent-ash-spec"
+import { createDevAgentEveArtifactDescriptor } from "@/lib/dev-agent-eve-spec"
 import { NO_DEV_SERVER_COMMAND } from "@/lib/dev-server-command"
 
 const CUSTOM_DEV_AGENT_PREFIX = "dev-agents/custom/"
@@ -51,10 +51,11 @@ export interface DevAgentSkillRef {
   sourceUrl?: string
 }
 
-export interface DevAgentAshCompiledSpec {
+export interface DevAgentEveCompiledSpec {
   schemaVersion: number
   artifactFormatVersion: number
-  ashRuntimeVersion: string
+  eveRuntimeVersion?: string
+  ashRuntimeVersion?: string
   createdAt: string
   id: string
   name: string
@@ -93,8 +94,8 @@ export interface DevAgentAshCompiledSpec {
   earlyExitPlacementIndex: number | null
 }
 
-export interface DevAgentAshArtifact {
-  framework: "experimental-ash"
+export interface DevAgentEveArtifact {
+  framework: "eve"
   revision: number
   specHash: string
   generatedAt: string
@@ -103,11 +104,11 @@ export interface DevAgentAshArtifact {
   sourceLabel: string
   systemPrompt: string
   packagedSkills?: string[]
-  compiledSpec?: DevAgentAshCompiledSpec
+  compiledSpec?: DevAgentEveCompiledSpec
   tarballUrl?: string
 }
 
-export type DevAgentAshArtifactAvailability = "existing" | "reused" | "stored"
+export type DevAgentEveArtifactAvailability = "existing" | "reused" | "stored"
 
 export type DevAgentAiAgent = "anthropic/claude-opus-4.6" | "anthropic/claude-sonnet-4.6"
 export type DevAgentEarlyExitMode = "structured" | "text"
@@ -298,7 +299,7 @@ export interface DevAgent {
   earlyExitEval?: string
   earlyExitRule?: DevAgentEarlyExitRule
   earlyExitPlacementIndex?: number
-  ashArtifact?: DevAgentAshArtifact
+  eveArtifact?: DevAgentEveArtifact
   runnerCanonicalPath?: string
   runnerSourceUrl?: string
   runnerSourceKind?: "default" | "imported"
@@ -1183,7 +1184,7 @@ function getBuiltinDevAgentDefaults(devAgentId: string): Omit<DevAgent, "usageCo
   return BUILTIN_DEV_AGENTS.find((candidate) => candidate.id === canonicalDevAgentId)
 }
 
-function toDevAgentAshInput(
+function toDevAgentEveInput(
   devAgent: Pick<
     Omit<DevAgent, "usageCount">,
     | "id"
@@ -1364,25 +1365,26 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
     skillRefs,
     sandboxBrowser: normalizedSandboxBrowser
   }
-  const synthesizedAshArtifact = createDevAgentAshArtifactDescriptor(
-    toDevAgentAshInput({
+  const existingEveArtifact = mergedDevAgent.eveArtifact
+  const synthesizedEveArtifact = createDevAgentEveArtifactDescriptor(
+    toDevAgentEveInput({
       ...normalizedDevAgent,
       sandboxBrowser: normalizedDevAgent.sandboxBrowser
     }),
-    mergedDevAgent.ashArtifact?.revision ?? 1,
-    mergedDevAgent.ashArtifact?.generatedAt || mergedDevAgent.updatedAt || mergedDevAgent.createdAt
+    existingEveArtifact?.revision ?? 1,
+    existingEveArtifact?.generatedAt || mergedDevAgent.updatedAt || mergedDevAgent.createdAt
   )
-  const normalizedAshArtifact =
-    mergedDevAgent.ashArtifact?.tarballUrl && mergedDevAgent.ashArtifact.specHash === synthesizedAshArtifact.specHash
+  const normalizedEveArtifact =
+    existingEveArtifact?.tarballUrl && existingEveArtifact.specHash === synthesizedEveArtifact.specHash
       ? {
-          ...synthesizedAshArtifact,
-          tarballUrl: mergedDevAgent.ashArtifact.tarballUrl
+          ...synthesizedEveArtifact,
+          tarballUrl: existingEveArtifact.tarballUrl
         }
-      : synthesizedAshArtifact
+      : synthesizedEveArtifact
 
   return {
     ...normalizedDevAgent,
-    ashArtifact: normalizedAshArtifact
+    eveArtifact: normalizedEveArtifact
   }
 }
 
@@ -1502,8 +1504,8 @@ export async function createCustomDevAgent(input: {
     typeof input.earlyExitPlacementIndex === "number" && Number.isInteger(input.earlyExitPlacementIndex)
       ? Math.max(0, input.earlyExitPlacementIndex)
       : undefined
-  const { publishDevAgentAshArtifact } = await import("@/lib/dev-agent-ash")
-  const ashArtifact = await publishDevAgentAshArtifact(
+  const { publishDevAgentEveArtifact } = await import("@/lib/dev-agent-eve")
+  const eveArtifact = await publishDevAgentEveArtifact(
     {
       id,
       name: input.name.trim(),
@@ -1547,7 +1549,7 @@ export async function createCustomDevAgent(input: {
     earlyExitEval: input.earlyExitEval?.trim() || undefined,
     earlyExitRule: normalizedEarlyExitRule,
     earlyExitPlacementIndex: normalizedEarlyExitPlacementIndex,
-    ashArtifact
+    eveArtifact
   }
 
   await putBlobAndBuildUrl(`${CUSTOM_DEV_AGENT_PREFIX}${id}.json`, JSON.stringify(storedDevAgent, null, 2), {
@@ -1589,8 +1591,9 @@ export async function updateCustomDevAgent(
     return null
   }
   const builtinDefaults = getBuiltinDevAgentDefaults(canonicalDevAgentId)
-  const nextRevision = (existingDevAgent.ashArtifact?.revision ?? 1) + 1
-  const { publishDevAgentAshArtifact } = await import("@/lib/dev-agent-ash")
+  const existingEveArtifact = existingDevAgent.eveArtifact
+  const nextRevision = (existingEveArtifact?.revision ?? 1) + 1
+  const { publishDevAgentEveArtifact } = await import("@/lib/dev-agent-eve")
   const normalizedInstructions = normalizeWorkflowAwareInstructions(input.instructions)?.trim() || ""
   const normalizedActionSteps = normalizeWorkflowAwareActionSteps(input.actionSteps)
 
@@ -1621,7 +1624,7 @@ export async function updateCustomDevAgent(
         ? Math.max(0, input.earlyExitPlacementIndex)
         : existingDevAgent.earlyExitPlacementIndex
   }
-  updatedDevAgent.ashArtifact = await publishDevAgentAshArtifact(
+  updatedDevAgent.eveArtifact = await publishDevAgentEveArtifact(
     {
       id: canonicalDevAgentId,
       name: updatedDevAgent.name,
@@ -1645,7 +1648,6 @@ export async function updateCustomDevAgent(
     },
     nextRevision
   )
-
   await putBlobAndBuildUrl(
     `${CUSTOM_DEV_AGENT_PREFIX}${canonicalDevAgentId}.json`,
     JSON.stringify(updatedDevAgent, null, 2),
@@ -1680,34 +1682,35 @@ export async function incrementDevAgentUsage(devAgentId: string): Promise<void> 
   })
 }
 
-export async function ensureDevAgentAshArtifactPublished(devAgent: DevAgent): Promise<DevAgentAshArtifact> {
-  const prepared = await ensureDevAgentAshArtifactPrepared(devAgent)
+export async function ensureDevAgentEveArtifactPublished(devAgent: DevAgent): Promise<DevAgentEveArtifact> {
+  const prepared = await ensureDevAgentEveArtifactPrepared(devAgent)
   return prepared.artifact
 }
 
-export async function ensureDevAgentAshArtifactPrepared(
+export async function ensureDevAgentEveArtifactPrepared(
   devAgent: DevAgent
-): Promise<{ artifact: DevAgentAshArtifact; state: DevAgentAshArtifactAvailability }> {
-  const currentDescriptor = createDevAgentAshArtifactDescriptor(
-    toDevAgentAshInput({
+): Promise<{ artifact: DevAgentEveArtifact; state: DevAgentEveArtifactAvailability }> {
+  const existingEveArtifact = devAgent.eveArtifact
+  const currentDescriptor = createDevAgentEveArtifactDescriptor(
+    toDevAgentEveInput({
       ...devAgent,
       sandboxBrowser: devAgent.sandboxBrowser
     }),
-    devAgent.ashArtifact?.revision ?? 1,
-    devAgent.ashArtifact?.generatedAt || devAgent.updatedAt || devAgent.createdAt
+    existingEveArtifact?.revision ?? 1,
+    existingEveArtifact?.generatedAt || devAgent.updatedAt || devAgent.createdAt
   )
 
-  if (devAgent.ashArtifact?.tarballUrl && devAgent.ashArtifact.specHash === currentDescriptor.specHash) {
-    return { artifact: devAgent.ashArtifact, state: "existing" }
+  if (existingEveArtifact?.tarballUrl && existingEveArtifact.specHash === currentDescriptor.specHash) {
+    return { artifact: existingEveArtifact, state: "existing" }
   }
 
-  const { publishDevAgentAshArtifactWithStatus } = await import("@/lib/dev-agent-ash")
-  const { artifact, publishState } = await publishDevAgentAshArtifactWithStatus(
-    toDevAgentAshInput({
+  const { publishDevAgentEveArtifactWithStatus } = await import("@/lib/dev-agent-eve")
+  const { artifact, publishState } = await publishDevAgentEveArtifactWithStatus(
+    toDevAgentEveInput({
       ...devAgent,
       sandboxBrowser: devAgent.sandboxBrowser
     }),
-    devAgent.ashArtifact?.revision ?? 1
+    existingEveArtifact?.revision ?? 1
   )
 
   return {

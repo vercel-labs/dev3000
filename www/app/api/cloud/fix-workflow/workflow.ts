@@ -13,7 +13,7 @@
 
 import { sleep } from "workflow"
 import { readBlobJson } from "@/lib/blob-store"
-import type { DevAgentAshCompiledSpec, DevAgentEarlyExitRule, DevAgentSkillRef } from "@/lib/dev-agents"
+import type { DevAgentEarlyExitRule, DevAgentEveCompiledSpec, DevAgentSkillRef } from "@/lib/dev-agents"
 import { isSelfHostedSkillRunnerRuntime } from "@/lib/skill-runner-runtime"
 import {
   buildTelemetryEvent,
@@ -100,7 +100,7 @@ interface V0DevAgentSourceResult {
 }
 
 function normalizeCompiledEarlyExitRule(
-  rule: DevAgentAshCompiledSpec["earlyExitRule"] | DevAgentEarlyExitRule | undefined
+  rule: DevAgentEveCompiledSpec["earlyExitRule"] | DevAgentEarlyExitRule | undefined
 ): DevAgentEarlyExitRule | undefined {
   if (!rule) return undefined
   return {
@@ -199,8 +199,8 @@ export async function cloudFixWorkflow(params: {
   devAgentName?: string
   devAgentDescription?: string
   devAgentInstructions?: string
-  devAgentCompiledSpec?: DevAgentAshCompiledSpec
-  devAgentAshTarballUrl?: string
+  devAgentCompiledSpec?: DevAgentEveCompiledSpec
+  devAgentEveTarballUrl?: string
   devAgentRevision?: number
   devAgentSpecHash?: string
   runnerKind?: "dev-agent" | "skill-runner"
@@ -274,7 +274,7 @@ export async function cloudFixWorkflow(params: {
     devAgentDescription,
     devAgentInstructions,
     devAgentCompiledSpec,
-    devAgentAshTarballUrl,
+    devAgentEveTarballUrl,
     devAgentRevision,
     devAgentSpecHash,
     runnerKind = "dev-agent",
@@ -500,7 +500,7 @@ export async function cloudFixWorkflow(params: {
         sourceTarballUrl,
         sourceLabel,
         vercelOidcToken,
-        devAgentAshTarballUrl,
+        devAgentEveTarballUrl,
         projectDir,
         effectiveDevAgentSandboxBrowser,
         effectiveDevAgentDevServerCommand,
@@ -629,7 +629,7 @@ export async function cloudFixWorkflow(params: {
         customPrompt,
         devAgentName,
         devAgentInstructions: effectiveDevAgentInstructions,
-        devAgentAshTarballUrl,
+        devAgentEveTarballUrl,
         devAgentExecutionMode: effectiveDevAgentExecutionMode,
         devAgentSandboxBrowser: effectiveDevAgentSandboxBrowser,
         devAgentDevServerCommand: effectiveDevAgentDevServerCommand,
@@ -771,7 +771,7 @@ export async function cloudFixWorkflow(params: {
         crawlDepth,
         devAgentName,
         effectiveDevAgentInstructions,
-        devAgentAshTarballUrl,
+        devAgentEveTarballUrl,
         effectiveDevAgentExecutionMode,
         effectiveDevAgentSandboxBrowser,
         effectiveDevAgentAiAgent,
@@ -1050,7 +1050,7 @@ async function observeBaseline(
   sourceTarballUrl?: string,
   sourceLabel?: string,
   vercelOidcToken?: string,
-  devAgentAshTarballUrl?: string,
+  devAgentEveTarballUrl?: string,
   projectDir?: string,
   devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentDevServerCommand?: string,
@@ -1085,7 +1085,7 @@ async function observeBaseline(
     sourceTarballUrl,
     sourceLabel,
     vercelOidcToken,
-    devAgentAshTarballUrl,
+    devAgentEveTarballUrl,
     projectDir,
     devAgentSandboxBrowser,
     devAgentDevServerCommand,
@@ -1192,7 +1192,7 @@ async function agentFixLoop(
   crawlDepth?: number | "all",
   devAgentName?: string,
   devAgentInstructions?: string,
-  devAgentAshTarballUrl?: string,
+  devAgentEveTarballUrl?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
   devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
@@ -1246,7 +1246,7 @@ async function agentFixLoop(
     crawlDepth,
     devAgentName,
     devAgentInstructions,
-    devAgentAshTarballUrl,
+    devAgentEveTarballUrl,
     devAgentExecutionMode,
     devAgentSandboxBrowser,
     devAgentAiAgent,

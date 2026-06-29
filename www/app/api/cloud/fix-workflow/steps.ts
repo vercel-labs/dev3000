@@ -15,7 +15,7 @@ import {
   requireAiGatewayAuthToken
 } from "@/lib/ai-gateway"
 import { putBlobAndBuildUrl, readBlobJson } from "@/lib/blob-store"
-import { D3K_ASH_RUNTIME_PORT, getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
+import { D3K_EVE_RUNTIME_PORT, getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
 import {
   buildPersistedDeepSecFindingsMarkdown,
@@ -53,18 +53,19 @@ const workflowLog = console.log
 const TURBOPACK_MIN_NEXT_VERSION = "16.1.0"
 const SUCCESS_EVAL_MODEL = "openai/gpt-5.4"
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code"
-const ASH_RUNTIME_PORT = D3K_ASH_RUNTIME_PORT
-const ASH_RUNTIME_USERNAME = "dev3000"
-const ASH_RUNTIME_ROOT = "/home/vercel-sandbox/.dev3000/ash-apps"
-const ASH_RUNTIME_LOG_DIR = "/home/vercel-sandbox/.d3k/logs"
-const ASH_TASK_ROUTE_PATH = "/.well-known/ash/v1/task"
-const ASH_STREAM_INITIAL_IDLE_TIMEOUT_MS = 5 * 60 * 1000
-const ASH_STREAM_ACTIVE_IDLE_TIMEOUT_MS = 15 * 60 * 1000
-const ASH_STREAM_RECONNECT_POLL_MS = 30 * 1000
-const ASH_SESSION_POLL_INTERVAL_MS = 2000
-const ASH_SESSION_POLL_TIMEOUT_MS = 25 * 60 * 1000
-const ASH_DIAGNOSTIC_HTTP_TIMEOUT_MS = 8000
-const ASH_DIAGNOSTIC_SANDBOX_TIMEOUT_MS = 15000
+const EVE_RUNTIME_PORT = D3K_EVE_RUNTIME_PORT
+const EVE_RUNTIME_USERNAME = "dev3000"
+const EVE_RUNTIME_ROOT = "/home/vercel-sandbox/.dev3000/eve-apps"
+const EVE_RUNTIME_LOG_DIR = "/home/vercel-sandbox/.d3k/logs"
+const EVE_DEV3000_HEALTH_ROUTE_PATH = "/eve/v1/dev3000/health"
+const EVE_TASK_ROUTE_PATH = "/eve/v1/dev3000/task"
+const EVE_STREAM_INITIAL_IDLE_TIMEOUT_MS = 5 * 60 * 1000
+const EVE_STREAM_ACTIVE_IDLE_TIMEOUT_MS = 15 * 60 * 1000
+const EVE_STREAM_RECONNECT_POLL_MS = 30 * 1000
+const EVE_SESSION_POLL_INTERVAL_MS = 2000
+const EVE_SESSION_POLL_TIMEOUT_MS = 25 * 60 * 1000
+const EVE_DIAGNOSTIC_HTTP_TIMEOUT_MS = 8000
+const EVE_DIAGNOSTIC_SANDBOX_TIMEOUT_MS = 15000
 const AI_GATEWAY_OIDC_EXPIRATION_BUFFER_MS = 10 * 60 * 1000
 const AI_GATEWAY_OIDC_MIN_USABLE_MS = 60 * 1000
 const DEEPSEC_PROCESS_TIMEOUT_MS = 25 * 60 * 1000
@@ -3429,7 +3430,7 @@ export async function observeBaselineStep(
   sourceTarballUrl?: string,
   sourceLabel?: string,
   vercelOidcToken?: string,
-  devAgentAshTarballUrl?: string,
+  devAgentEveTarballUrl?: string,
   projectDir?: string,
   devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentDevServerCommand?: string,
@@ -3540,7 +3541,7 @@ export async function observeBaselineStep(
     devAgentSkillRefs,
     progressContext,
     {
-      devAgentAshTarballUrl,
+      devAgentEveTarballUrl,
       includeD3k: !isCodeOnlyWorkflow
     }
   )
@@ -5056,7 +5057,7 @@ type DeepSecStepParams = {
   customPrompt?: string
   devAgentName?: string
   devAgentInstructions?: string
-  devAgentAshTarballUrl?: string
+  devAgentEveTarballUrl?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser"
   devAgentDevServerCommand?: string
@@ -5167,7 +5168,7 @@ export async function deepSecPrepareStep(params: DeepSecStepParams): Promise<Dee
       params.devAgentSkillRefs,
       params.progressContext,
       {
-        devAgentAshTarballUrl: params.devAgentAshTarballUrl,
+        devAgentEveTarballUrl: params.devAgentEveTarballUrl,
         includeD3k: false
       }
     )
@@ -6057,7 +6058,7 @@ export async function agentFixLoopStep(
   crawlDepth?: number | "all",
   devAgentName?: string,
   devAgentInstructions?: string,
-  devAgentAshTarballUrl?: string,
+  devAgentEveTarballUrl?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
   devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
@@ -6173,7 +6174,7 @@ export async function agentFixLoopStep(
     await appendProgressLog(progressContext, "[Agent] Preparing skills...")
     try {
       await installDevAgentSkillsInSandbox(sandbox, effectiveProjectDir, devAgentSkillRefs, progressContext, {
-        devAgentAshTarballUrl,
+        devAgentEveTarballUrl,
         includeD3k: !isCodeOnlyWorkflow
       })
     } catch (skillInstallError) {
@@ -6292,7 +6293,7 @@ export async function agentFixLoopStep(
     devAgentAiAgent,
     devAgentActionSteps,
     devAgentSkillRefs,
-    devAgentAshTarballUrl,
+    devAgentEveTarballUrl,
     bundleBaselineSummary,
     gatewayAuthToken,
     gatewayAuthSource,
@@ -7170,7 +7171,7 @@ function buildClaudeAiGatewayEnv(gatewayAuthToken: string, gatewayAuthSource: st
 
 function getInstalledSkillNames(
   devAgentSkillRefs: DevAgentSkillRef[] | undefined,
-  options?: { includeD3k?: boolean; includeAshRunbook?: boolean }
+  options?: { includeD3k?: boolean; includeEveRunbook?: boolean }
 ): string[] {
   const names = new Set<string>()
   if (options?.includeD3k !== false) {
@@ -7212,7 +7213,7 @@ function buildSkillsInstallShellCommand(installArg: string): string {
   return `npx --yes skills@latest add ${shellEscape(normalizedInstallArg)} --agent ${agentSlug} -y`
 }
 
-async function installPackagedAshSkillsInSandbox(
+async function installPackagedEveSkillsInSandbox(
   sandbox: Sandbox,
   tarballUrl: string,
   progressContext?: ProgressContext | null
@@ -7222,10 +7223,10 @@ async function installPackagedAshSkillsInSandbox(
     [
       "set -e",
       'TMP_DIR="$(mktemp -d)"',
-      `curl -fsSL ${shellEscape(tarballUrl)} -o "$TMP_DIR/ash.tgz"`,
-      'ROOT_DIR="$(tar -tzf "$TMP_DIR/ash.tgz" | head -1 | cut -d/ -f1)"',
+      `curl -fsSL ${shellEscape(tarballUrl)} -o "$TMP_DIR/eve.tgz"`,
+      'ROOT_DIR="$(tar -tzf "$TMP_DIR/eve.tgz" | head -1 | cut -d/ -f1)"',
       'mkdir -p "$TMP_DIR/unpack" "$HOME/.claude/skills"',
-      'tar -xzf "$TMP_DIR/ash.tgz" -C "$TMP_DIR/unpack"',
+      'tar -xzf "$TMP_DIR/eve.tgz" -C "$TMP_DIR/unpack"',
       'SKILLS_DIR="$TMP_DIR/unpack/$ROOT_DIR/agent/skills"',
       'if [ ! -d "$SKILLS_DIR" ]; then echo "__NO_PACKAGED_SKILLS__"; exit 0; fi',
       'cp -R "$SKILLS_DIR"/. "$HOME/.claude/skills/"',
@@ -7264,17 +7265,17 @@ async function installPackagedAshSkillsInSandbox(
   return { installed: skillNames.length > 0, skillNames }
 }
 
-function buildAshRuntimePassword(runId: string, specHash?: string): string {
-  return Buffer.from(`${runId}:${specHash || "no-spec"}:dev3000-ash-runtime`, "utf8").toString("base64url")
+function buildEveRuntimePassword(runId: string, specHash?: string): string {
+  return Buffer.from(`${runId}:${specHash || "no-spec"}:dev3000-eve-runtime`, "utf8").toString("base64url")
 }
 
-function buildAshRuntimeAppRoot(specHash?: string): string {
+function buildEveRuntimeAppRoot(specHash?: string): string {
   const safeKey = (specHash || "default").replace(/[^a-zA-Z0-9_-]/g, "-")
-  return `${ASH_RUNTIME_ROOT}/${safeKey}`
+  return `${EVE_RUNTIME_ROOT}/${safeKey}`
 }
 
-function buildAshRuntimeAuthorizationHeader(password: string): string {
-  return `Basic ${Buffer.from(`${ASH_RUNTIME_USERNAME}:${password}`, "utf8").toString("base64")}`
+function buildEveRuntimeAuthorizationHeader(password: string): string {
+  return `Basic ${Buffer.from(`${EVE_RUNTIME_USERNAME}:${password}`, "utf8").toString("base64")}`
 }
 
 function buildSandboxToolchainEnv(): { HOME: string; PATH: string } {
@@ -7311,11 +7312,11 @@ function buildEnsureNode24AvailableScript(): string {
     'NODE24_BIN=""',
     'for candidate in "/vercel/runtimes/node24/bin/node" "/vercel/runtimes/node24/bin/nodejs" "/vercel/runtimes/nodejs/bin/node" "/usr/local/bin/node" "/usr/bin/node" "/bin/node"; do if [ -x "$candidate" ]; then NODE24_BIN="$candidate"; break; fi; done',
     'if [ -z "$NODE24_BIN" ]; then FOUND_NODE="$(PATH="/vercel/runtimes/node24/bin:/vercel/runtimes/nodejs/bin:/usr/local/bin:/usr/bin:/bin" command -v node || command -v nodejs || true)"; if [ -n "$FOUND_NODE" ] && [ "$FOUND_NODE" != "$HOME/.local/bin/node" ] && [ "$FOUND_NODE" != "$HOME/.local/bin/nodejs" ]; then NODE24_BIN="$FOUND_NODE"; fi; fi',
-    'if [ -z "$NODE24_BIN" ]; then echo "Node.js runtime unavailable for ASH." >&2; exit 1; fi',
+    'if [ -z "$NODE24_BIN" ]; then echo "Node.js runtime unavailable for EVE." >&2; exit 1; fi',
     'NODE24_BIN="$(readlink -f "$NODE24_BIN" 2>/dev/null || printf "%s" "$NODE24_BIN")"',
     'NODE24_MAJOR="$("$NODE24_BIN" -p "process.versions.node.split(\\".\\")[0]" 2>/dev/null || true)"',
     'case "$NODE24_MAJOR" in ""|*[!0-9]*) NODE24_MAJOR=0 ;; esac',
-    'if [ "$NODE24_MAJOR" -lt 24 ]; then echo "Node.js 24+ required for ASH; found $("$NODE24_BIN" --version 2>/dev/null || printf unknown)" >&2; exit 1; fi',
+    'if [ "$NODE24_MAJOR" -lt 24 ]; then echo "Node.js 24+ required for EVE; found $("$NODE24_BIN" --version 2>/dev/null || printf unknown)" >&2; exit 1; fi',
     'rm -f "$HOME/.local/bin/node" "$HOME/.local/bin/nodejs"',
     'ln -sf "$NODE24_BIN" "$HOME/.local/bin/node"',
     'ln -sf "$NODE24_BIN" "$HOME/.local/bin/nodejs"',
@@ -7324,13 +7325,13 @@ function buildEnsureNode24AvailableScript(): string {
   ].join("\n")
 }
 
-async function installPackagedAshAppInSandbox(
+async function installPackagedEveAppInSandbox(
   sandbox: Sandbox,
   tarballUrl: string,
   specHash: string | undefined,
   progressContext?: ProgressContext | null
 ): Promise<{ appRoot: string }> {
-  const appRoot = buildAshRuntimeAppRoot(specHash)
+  const appRoot = buildEveRuntimeAppRoot(specHash)
   const result = await runSandboxCommandWithOptions(
     sandbox,
     {
@@ -7344,18 +7345,18 @@ async function installPackagedAshAppInSandbox(
           buildEnsureNode24AvailableScript(),
           buildEnsureBunAvailableScript(),
           'TMP_DIR="$(mktemp -d)"',
-          `curl -fsSL ${shellEscape(tarballUrl)} -o "$TMP_DIR/ash.tgz"`,
-          'ROOT_DIR="$(tar -tzf "$TMP_DIR/ash.tgz" | head -1 | cut -d/ -f1)"',
-          `mkdir -p ${shellEscape(ASH_RUNTIME_ROOT)}`,
+          `curl -fsSL ${shellEscape(tarballUrl)} -o "$TMP_DIR/eve.tgz"`,
+          'ROOT_DIR="$(tar -tzf "$TMP_DIR/eve.tgz" | head -1 | cut -d/ -f1)"',
+          `mkdir -p ${shellEscape(EVE_RUNTIME_ROOT)}`,
           'rm -rf "$TMP_DIR/unpack" "$APP_ROOT.tmp"',
           'mkdir -p "$TMP_DIR/unpack"',
-          'tar -xzf "$TMP_DIR/ash.tgz" -C "$TMP_DIR/unpack"',
+          'tar -xzf "$TMP_DIR/eve.tgz" -C "$TMP_DIR/unpack"',
           'mv "$TMP_DIR/unpack/$ROOT_DIR" "$APP_ROOT.tmp"',
           'rm -rf "$APP_ROOT"',
           'mv "$APP_ROOT.tmp" "$APP_ROOT"',
           "unset VERCEL VERCEL_DEPLOYMENT_ID VERCEL_PROJECT_ID VERCEL_URL VERCEL_ENV VERCEL_TARGET_ENV",
           "export WORKFLOW_TARGET_WORLD=local",
-          "export DEV3000_ASH_RUNTIME_PASSWORD=build-only",
+          "export DEV3000_EVE_RUNTIME_PASSWORD=build-only",
           'cd "$APP_ROOT"',
           '"$BUN_BIN" install --silent --minimum-release-age=0',
           '"$NODE24_BIN" scripts/patch-workflow-world-local.mjs',
@@ -7363,8 +7364,8 @@ async function installPackagedAshAppInSandbox(
             "BUILD_STATUS=1",
             "for BUILD_ATTEMPT in 1 2 3; do",
             '  rm -rf "$APP_ROOT/.output"',
-            "  if ./node_modules/.bin/ash build; then BUILD_STATUS=0; break; fi",
-            '  echo "ash build failed on attempt $BUILD_ATTEMPT; retrying" >&2',
+            "  if ./node_modules/.bin/eve build; then BUILD_STATUS=0; break; fi",
+            '  echo "eve build failed on attempt $BUILD_ATTEMPT; retrying" >&2',
             '  "$NODE24_BIN" scripts/patch-workflow-world-local.mjs || true',
             "  sleep 2",
             "done",
@@ -7381,14 +7382,14 @@ async function installPackagedAshAppInSandbox(
 
   const output = `${result.stdout}\n${result.stderr}`.trim()
   if (result.exitCode !== 0) {
-    throw new Error(`Failed to install packaged ASH app: ${output || "unknown error"}`)
+    throw new Error(`Failed to install packaged EVE app: ${output || "unknown error"}`)
   }
 
   await appendProgressLog(progressContext, "[Agent] Prepared analysis runner")
   return { appRoot }
 }
 
-async function waitForAshRuntimeReady(
+async function waitForEveRuntimeReady(
   sandbox: Sandbox,
   port: number,
   authorization: string,
@@ -7401,7 +7402,7 @@ async function waitForAshRuntimeReady(
   while (Date.now() < deadline) {
     try {
       const baseUrl = sandbox.domain(port)
-      const response = await fetch(`${baseUrl}/.well-known/ash/v1/health`, {
+      const response = await fetch(`${baseUrl}${EVE_DEV3000_HEALTH_ROUTE_PATH}`, {
         headers: { authorization, "cache-control": "no-store" }
       })
       if (response.ok) {
@@ -7443,11 +7444,11 @@ async function waitForAshRuntimeReady(
   }
 
   throw new Error(
-    `Timed out waiting for packaged ASH runtime on port ${port}${lastRouteError ? ` (${lastRouteError})` : ""}${runtimeLogPreview ? ` log=${runtimeLogPreview}` : ""}`
+    `Timed out waiting for packaged EVE runtime on port ${port}${lastRouteError ? ` (${lastRouteError})` : ""}${runtimeLogPreview ? ` log=${runtimeLogPreview}` : ""}`
   )
 }
 
-async function ensurePackagedAshRuntimeInSandbox(
+async function ensurePackagedEveRuntimeInSandbox(
   sandbox: Sandbox,
   tarballUrl: string,
   specHash: string | undefined,
@@ -7457,12 +7458,12 @@ async function ensurePackagedAshRuntimeInSandbox(
   vercelCliContext?: VercelCliSandboxContext,
   progressContext?: ProgressContext | null
 ): Promise<{ authorization: string; baseUrl: string; logPath: string; workflowDataDir: string }> {
-  const { appRoot } = await installPackagedAshAppInSandbox(sandbox, tarballUrl, specHash, progressContext)
+  const { appRoot } = await installPackagedEveAppInSandbox(sandbox, tarballUrl, specHash, progressContext)
   const runtimeRunKey = progressContext?.runId || crypto.randomUUID()
-  const runtimePassword = buildAshRuntimePassword(runtimeRunKey, specHash)
-  const authorization = buildAshRuntimeAuthorizationHeader(runtimePassword)
-  const logPath = `${ASH_RUNTIME_LOG_DIR}/ash-runtime.log`
-  const workflowDataDir = `${ASH_RUNTIME_ROOT}/workflow-data/${runtimeRunKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`
+  const runtimePassword = buildEveRuntimePassword(runtimeRunKey, specHash)
+  const authorization = buildEveRuntimeAuthorizationHeader(runtimePassword)
+  const logPath = `${EVE_RUNTIME_LOG_DIR}/eve-runtime.log`
+  const workflowDataDir = `${EVE_RUNTIME_ROOT}/workflow-data/${runtimeRunKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`
 
   await appendProgressLog(progressContext, "[Agent] Starting analysis runner...")
   await sandbox.runCommand({
@@ -7470,33 +7471,33 @@ async function ensurePackagedAshRuntimeInSandbox(
     args: [
       "-lc",
       [
-        `mkdir -p ${ASH_RUNTIME_LOG_DIR}`,
+        `mkdir -p ${EVE_RUNTIME_LOG_DIR}`,
         buildEnsureNode24AvailableScript(),
         buildEnsureBunAvailableScript(),
         'mkdir -p "$HOME/.local/bin"',
         "export PATH=$HOME/.local/bin:$PATH",
         'NODE_RUNTIME="$(command -v node || command -v nodejs || true)"',
-        'if [ -z "$NODE_RUNTIME" ]; then echo "No Node.js runtime available for ASH." >&2; exit 1; fi',
+        'if [ -z "$NODE_RUNTIME" ]; then echo "No Node.js runtime available for EVE." >&2; exit 1; fi',
         "unset VERCEL VERCEL_DEPLOYMENT_ID VERCEL_URL VERCEL_ENV VERCEL_TARGET_ENV",
         "export WORKFLOW_TARGET_WORLD=local",
-        `export WORKFLOW_LOCAL_BASE_URL=http://127.0.0.1:${ASH_RUNTIME_PORT}`,
+        `export WORKFLOW_LOCAL_BASE_URL=http://127.0.0.1:${EVE_RUNTIME_PORT}`,
         `export WORKFLOW_LOCAL_DATA_DIR=${shellEscape(workflowDataDir)}`,
-        `export DEV3000_ASH_RUNTIME_USERNAME=${shellEscape(ASH_RUNTIME_USERNAME)}`,
-        `export DEV3000_ASH_RUNTIME_PASSWORD=${shellEscape(runtimePassword)}`,
+        `export DEV3000_EVE_RUNTIME_USERNAME=${shellEscape(EVE_RUNTIME_USERNAME)}`,
+        `export DEV3000_EVE_RUNTIME_PASSWORD=${shellEscape(runtimePassword)}`,
         `export DEV3000_PROJECT_ROOT=${shellEscape(projectRoot)}`,
         ...buildAiGatewayShellExports(gatewayAuthToken, gatewayAuthSource),
-        `export PORT=${ASH_RUNTIME_PORT}`,
+        `export PORT=${EVE_RUNTIME_PORT}`,
         "export HOST=0.0.0.0",
         "export HOSTNAME=0.0.0.0",
-        `export NITRO_PORT=${ASH_RUNTIME_PORT}`,
+        `export NITRO_PORT=${EVE_RUNTIME_PORT}`,
         "export NITRO_HOST=0.0.0.0",
         `: > ${logPath}`,
-        `printf 'launching packaged ASH runtime\\n' >> ${logPath}`,
+        `printf 'launching packaged EVE runtime\\n' >> ${logPath}`,
         `cd ${shellEscape(appRoot)}`,
-        `if [ -f scripts/patch-workflow-world-local.mjs ]; then "$NODE_RUNTIME" scripts/patch-workflow-world-local.mjs >> ${logPath} 2>&1 || { echo "ASH workflow schema patch failed" >> ${logPath}; exit 1; }; fi`,
-        `printf 'runtime=%s\\npwd=%s\\nport=%s\\nworkflow_world=%s\\nworkflow_base_url=%s\\nworkflow_data_dir=%s\\nvercel=%s\\n' "$NODE_RUNTIME" "$(pwd)" "${ASH_RUNTIME_PORT}" "$WORKFLOW_TARGET_WORLD" "$WORKFLOW_LOCAL_BASE_URL" "$WORKFLOW_LOCAL_DATA_DIR" "$VERCEL" >> ${logPath}`,
-        `ls -l ./node_modules/.bin/ash ./.output/server/index.mjs >> ${logPath} 2>&1 || true`,
-        `exec "$NODE_RUNTIME" ./node_modules/.bin/ash start >> ${logPath} 2>&1`
+        `if [ -f scripts/patch-workflow-world-local.mjs ]; then "$NODE_RUNTIME" scripts/patch-workflow-world-local.mjs >> ${logPath} 2>&1 || { echo "EVE workflow schema patch failed" >> ${logPath}; exit 1; }; fi`,
+        `printf 'runtime=%s\\npwd=%s\\nport=%s\\nworkflow_world=%s\\nworkflow_base_url=%s\\nworkflow_data_dir=%s\\nvercel=%s\\n' "$NODE_RUNTIME" "$(pwd)" "${EVE_RUNTIME_PORT}" "$WORKFLOW_TARGET_WORLD" "$WORKFLOW_LOCAL_BASE_URL" "$WORKFLOW_LOCAL_DATA_DIR" "$VERCEL" >> ${logPath}`,
+        `ls -l ./node_modules/.bin/eve ./.output/server/index.mjs >> ${logPath} 2>&1 || true`,
+        `exec "$NODE_RUNTIME" ./node_modules/.bin/eve start >> ${logPath} 2>&1`
       ]
         .filter(Boolean)
         .join("\n")
@@ -7508,13 +7509,13 @@ async function ensurePackagedAshRuntimeInSandbox(
     }
   })
 
-  const baseUrl = await waitForAshRuntimeReady(sandbox, ASH_RUNTIME_PORT, authorization, progressContext, logPath)
+  const baseUrl = await waitForEveRuntimeReady(sandbox, EVE_RUNTIME_PORT, authorization, progressContext, logPath)
   return { authorization, baseUrl, logPath, workflowDataDir }
 }
 
-type AshRuntimeDiagnostics = (sessionId: string) => Promise<string>
+type EveRuntimeDiagnostics = (sessionId: string) => Promise<string>
 
-function formatAshRuntimeInputPreview(input: unknown): string {
+function formatEveRuntimeInputPreview(input: unknown): string {
   if (!input || typeof input !== "object") {
     return ""
   }
@@ -7531,7 +7532,7 @@ function formatAshRuntimeInputPreview(input: unknown): string {
   return ""
 }
 
-function formatAshRuntimeActionRequest(action: unknown): string {
+function formatEveRuntimeActionRequest(action: unknown): string {
   if (!action || typeof action !== "object") {
     return "unknown action"
   }
@@ -7540,20 +7541,20 @@ function formatAshRuntimeActionRequest(action: unknown): string {
   const kind = typeof record.kind === "string" ? record.kind : "action"
   if (kind === "tool-call") {
     const toolName = typeof record.toolName === "string" ? record.toolName : "tool"
-    return `${toolName}${formatAshRuntimeInputPreview(record.input)}`
+    return `${toolName}${formatEveRuntimeInputPreview(record.input)}`
   }
   if (kind === "load-skill") {
-    return `load skill${formatAshRuntimeInputPreview(record.input)}`
+    return `load skill${formatEveRuntimeInputPreview(record.input)}`
   }
   if (kind === "subagent-call") {
     const name = typeof record.name === "string" ? record.name : "subagent"
-    return `subagent ${name}${formatAshRuntimeInputPreview(record.input)}`
+    return `subagent ${name}${formatEveRuntimeInputPreview(record.input)}`
   }
 
-  return `${kind}${formatAshRuntimeInputPreview(record.input)}`
+  return `${kind}${formatEveRuntimeInputPreview(record.input)}`
 }
 
-function formatAshRuntimeActionResult(result: unknown): string {
+function formatEveRuntimeActionResult(result: unknown): string {
   if (!result || typeof result !== "object") {
     return "unknown action"
   }
@@ -7573,7 +7574,7 @@ function formatAshRuntimeActionResult(result: unknown): string {
   return kind
 }
 
-function redactAshDiagnosticSecrets(value: string): string {
+function redactEveDiagnosticSecrets(value: string): string {
   return value
     .replace(/\b(Bearer)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 [redacted]")
     .replace(/\b(Basic)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 [redacted]")
@@ -7584,20 +7585,20 @@ function redactAshDiagnosticSecrets(value: string): string {
     )
 }
 
-function formatAshDiagnosticText(raw: string, maxLength = 5000): string {
-  const redacted = redactAshDiagnosticSecrets(raw).trim()
+function formatEveDiagnosticText(raw: string, maxLength = 5000): string {
+  const redacted = redactEveDiagnosticSecrets(raw).trim()
   if (!redacted) return "<empty>"
   return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}... <truncated>` : redacted
 }
 
-async function fetchAshRuntimeDiagnosticRoute(
+async function fetchEveRuntimeDiagnosticRoute(
   baseUrl: string,
   authorization: string,
   label: string,
   path: string
 ): Promise<string> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), ASH_DIAGNOSTIC_HTTP_TIMEOUT_MS)
+  const timeoutId = setTimeout(() => controller.abort(), EVE_DIAGNOSTIC_HTTP_TIMEOUT_MS)
 
   try {
     const response = await fetch(new URL(path, baseUrl), {
@@ -7605,7 +7606,7 @@ async function fetchAshRuntimeDiagnosticRoute(
       signal: controller.signal
     })
     const body = await response.text()
-    return `${label} ${response.status}: ${formatAshDiagnosticText(body, 1000)}`
+    return `${label} ${response.status}: ${formatEveDiagnosticText(body, 1000)}`
   } catch (error) {
     return `${label} failed: ${formatErrorMessage(error)}`
   } finally {
@@ -7613,14 +7614,14 @@ async function fetchAshRuntimeDiagnosticRoute(
   }
 }
 
-async function collectAshRuntimeHttpDiagnostics(
+async function collectEveRuntimeHttpDiagnostics(
   baseUrl: string,
   authorization: string,
   sessionId: string
 ): Promise<string> {
   const encodedSessionId = encodeURIComponent(sessionId)
   const probes = [
-    ["health", "/.well-known/ash/v1/health"],
+    ["health", EVE_DEV3000_HEALTH_ROUTE_PATH],
     ["runs", "/api/runs?sortOrder=desc&limit=10"],
     ["run", `/api/runs/${encodedSessionId}`],
     ["events", `/api/runs/${encodedSessionId}/events?sortOrder=asc&limit=20`],
@@ -7628,13 +7629,13 @@ async function collectAshRuntimeHttpDiagnostics(
   ] as const
 
   const results = await Promise.all(
-    probes.map(([label, path]) => fetchAshRuntimeDiagnosticRoute(baseUrl, authorization, label, path))
+    probes.map(([label, path]) => fetchEveRuntimeDiagnosticRoute(baseUrl, authorization, label, path))
   )
 
   return results.join("\n")
 }
 
-async function collectAshRuntimeSandboxDiagnostics(
+async function collectEveRuntimeSandboxDiagnostics(
   sandbox: Sandbox,
   logPath: string,
   workflowDataDir: string,
@@ -7643,7 +7644,7 @@ async function collectAshRuntimeSandboxDiagnostics(
   const streamName = `${sessionId.replace(/^wrun_/, "strm_")}_user`
   const script = [
     "set +e",
-    "printf '__ASH_RUNTIME_LOG__\\n'",
+    "printf '__EVE_RUNTIME_LOG__\\n'",
     `if [ -f ${shellEscape(logPath)} ]; then tail -n 220 ${shellEscape(logPath)}; else echo "missing ${logPath}"; fi`,
     "printf '\\n__WORKFLOW_TREE__\\n'",
     `if [ -d ${shellEscape(workflowDataDir)} ]; then find ${shellEscape(workflowDataDir)} -maxdepth 5 -type f -printf '%p %s bytes\\n' | sort | head -240; else echo "missing ${workflowDataDir}"; fi`,
@@ -7671,16 +7672,16 @@ async function collectAshRuntimeSandboxDiagnostics(
       args: ["-lc", script],
       env: buildSandboxToolchainEnv()
     },
-    { timeoutMs: ASH_DIAGNOSTIC_SANDBOX_TIMEOUT_MS }
+    { timeoutMs: EVE_DIAGNOSTIC_SANDBOX_TIMEOUT_MS }
   )
 
-  return formatAshDiagnosticText(
+  return formatEveDiagnosticText(
     [`exit=${result.exitCode}`, result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n"),
     6000
   )
 }
 
-async function collectAshRuntimeDiagnostics({
+async function collectEveRuntimeDiagnostics({
   authorization,
   baseUrl,
   logPath,
@@ -7698,11 +7699,11 @@ async function collectAshRuntimeDiagnostics({
   workflowDataDir: string
 }): Promise<string> {
   const [httpDiagnostics, sandboxDiagnostics] = await Promise.all([
-    collectAshRuntimeHttpDiagnostics(baseUrl, authorization, sessionId),
-    collectAshRuntimeSandboxDiagnostics(sandbox, logPath, workflowDataDir, sessionId)
+    collectEveRuntimeHttpDiagnostics(baseUrl, authorization, sessionId),
+    collectEveRuntimeSandboxDiagnostics(sandbox, logPath, workflowDataDir, sessionId)
   ])
-  const diagnostics = formatAshDiagnosticText(
-    [`ASH HTTP diagnostics`, httpDiagnostics, "", "ASH sandbox diagnostics", sandboxDiagnostics].join("\n"),
+  const diagnostics = formatEveDiagnosticText(
+    [`EVE HTTP diagnostics`, httpDiagnostics, "", "EVE sandbox diagnostics", sandboxDiagnostics].join("\n"),
     9000
   )
 
@@ -7714,7 +7715,7 @@ async function collectAshRuntimeDiagnostics({
   return diagnostics
 }
 
-function buildAshRuntimePromptPrefix({
+function buildEveRuntimePromptPrefix({
   devUrl,
   devAgentSandboxBrowser,
   skillLoadInstructions
@@ -7723,18 +7724,18 @@ function buildAshRuntimePromptPrefix({
   devAgentSandboxBrowser?: "none" | "agent-browser"
   skillLoadInstructions: string
 }): string {
-  return `ASH runtime notes:
+  return `EVE runtime notes:
 - Load the \`dev3000-agent-runbook\` skill first.
 - If other packaged skills are relevant, load them too.
 - The real project checkout is available at \`/workspace/repo\`. Use it for inspection and any workflow-permitted file writes.
 - The live app is available at ${devUrl || "http://localhost:3000"}.
 - Preferred browser mode: ${devAgentSandboxBrowser || "none"}.
-- Installed skills are available via the ASH artifact and session runtime: ${skillLoadInstructions}.
+- Installed skills are available via the EVE artifact and session runtime: ${skillLoadInstructions}.
 - When browser validation helps, you may use the installed \`agent-browser\` CLI against localhost URLs.
 - Prefer direct code changes and targeted validation over broad exploration.`
 }
 
-async function readAshStreamChunkWithTimeout(
+async function readEveStreamChunkWithTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   timeoutMs: number
 ): Promise<ReadableStreamReadResult<Uint8Array> | { timedOut: true }> {
@@ -7753,7 +7754,7 @@ async function readAshStreamChunkWithTimeout(
   }
 }
 
-type AshRuntimeUsage = {
+type EveRuntimeUsage = {
   promptTokens: number
   completionTokens: number
   cacheReadTokens: number
@@ -7761,7 +7762,7 @@ type AshRuntimeUsage = {
   totalTokens: number
 }
 
-function createEmptyAshRuntimeUsage(): AshRuntimeUsage {
+function createEmptyEveRuntimeUsage(): EveRuntimeUsage {
   return {
     promptTokens: 0,
     completionTokens: 0,
@@ -7771,12 +7772,12 @@ function createEmptyAshRuntimeUsage(): AshRuntimeUsage {
   }
 }
 
-function normalizeAshRuntimeUsage(value: unknown): AshRuntimeUsage {
+function normalizeEveRuntimeUsage(value: unknown): EveRuntimeUsage {
   if (!value || typeof value !== "object") {
-    return createEmptyAshRuntimeUsage()
+    return createEmptyEveRuntimeUsage()
   }
 
-  const usage = value as Partial<Record<keyof AshRuntimeUsage, unknown>>
+  const usage = value as Partial<Record<keyof EveRuntimeUsage, unknown>>
   const promptTokens = typeof usage.promptTokens === "number" ? usage.promptTokens : 0
   const completionTokens = typeof usage.completionTokens === "number" ? usage.completionTokens : 0
   const cacheReadTokens = typeof usage.cacheReadTokens === "number" ? usage.cacheReadTokens : 0
@@ -7793,7 +7794,7 @@ function normalizeAshRuntimeUsage(value: unknown): AshRuntimeUsage {
   }
 }
 
-function extractAshRuntimeTaskResultText(payload: {
+function extractEveRuntimeTaskResultText(payload: {
   result?: unknown
   resultText?: unknown
   summary?: unknown
@@ -7820,7 +7821,7 @@ function extractAshRuntimeTaskResultText(payload: {
   return typeof message === "string" ? message.trim() : ""
 }
 
-function extractAshRuntimeTaskTerminalState(payload: {
+function extractEveRuntimeTaskTerminalState(payload: {
   result?: unknown
   terminalState?: unknown
 }): "waiting" | "completed" | null {
@@ -7843,7 +7844,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null
 }
 
-function collectAshRuntimePayloadRecords(payload: unknown): Record<string, unknown>[] {
+function collectEveRuntimePayloadRecords(payload: unknown): Record<string, unknown>[] {
   const root = asRecord(payload)
   if (!root) return []
 
@@ -7856,7 +7857,7 @@ function collectAshRuntimePayloadRecords(payload: unknown): Record<string, unkno
   return records
 }
 
-function normalizeAshRuntimeSessionState(value: unknown): "waiting" | "completed" | "failed" | null {
+function normalizeEveRuntimeSessionState(value: unknown): "waiting" | "completed" | "failed" | null {
   if (typeof value !== "string") return null
   const normalized = value.trim().toLowerCase()
   if (!normalized) return null
@@ -7876,10 +7877,10 @@ function normalizeAshRuntimeSessionState(value: unknown): "waiting" | "completed
   return null
 }
 
-function extractAshRuntimeSessionPollState(payload: unknown): "waiting" | "completed" | "failed" | null {
-  for (const record of collectAshRuntimePayloadRecords(payload)) {
+function extractEveRuntimeSessionPollState(payload: unknown): "waiting" | "completed" | "failed" | null {
+  for (const record of collectEveRuntimePayloadRecords(payload)) {
     for (const key of ["terminalState", "status", "state", "phase", "readyState"]) {
-      const state = normalizeAshRuntimeSessionState(record[key])
+      const state = normalizeEveRuntimeSessionState(record[key])
       if (state) return state
     }
 
@@ -7891,8 +7892,8 @@ function extractAshRuntimeSessionPollState(payload: unknown): "waiting" | "compl
   return null
 }
 
-function extractAshRuntimeSessionErrorText(payload: unknown): string {
-  for (const record of collectAshRuntimePayloadRecords(payload)) {
+function extractEveRuntimeSessionErrorText(payload: unknown): string {
+  for (const record of collectEveRuntimePayloadRecords(payload)) {
     const directError = record.error
     if (typeof directError === "string" && directError.trim()) return directError.trim()
     const errorRecord = asRecord(directError)
@@ -7905,12 +7906,12 @@ function extractAshRuntimeSessionErrorText(payload: unknown): string {
     if (typeof message === "string" && message.trim()) return message.trim()
   }
 
-  return "ASH runtime session failed"
+  return "EVE runtime session failed"
 }
 
-function extractAshRuntimeTextFromPayload(payload: unknown): string {
-  for (const record of collectAshRuntimePayloadRecords(payload)) {
-    const resultText = extractAshRuntimeTaskResultText({
+function extractEveRuntimeTextFromPayload(payload: unknown): string {
+  for (const record of collectEveRuntimePayloadRecords(payload)) {
+    const resultText = extractEveRuntimeTaskResultText({
       result: record.result,
       resultText: record.resultText,
       summary: record.summary
@@ -7928,7 +7929,7 @@ function extractAshRuntimeTextFromPayload(payload: unknown): string {
   return ""
 }
 
-function extractAshRuntimeEvents(payload: unknown): unknown[] {
+function extractEveRuntimeEvents(payload: unknown): unknown[] {
   if (Array.isArray(payload)) return payload
 
   const record = asRecord(payload)
@@ -7941,16 +7942,16 @@ function extractAshRuntimeEvents(payload: unknown): unknown[] {
 
   const data = record.data
   if (Array.isArray(data)) return data
-  if (data && typeof data === "object") return extractAshRuntimeEvents(data)
+  if (data && typeof data === "object") return extractEveRuntimeEvents(data)
 
   return []
 }
 
-function summarizeAshRuntimeEvents(events: unknown[]): {
+function summarizeEveRuntimeEvents(events: unknown[]): {
   hasRuntimeEvents: boolean
   rawEvents: string[]
   resultText: string
-  usage: AshRuntimeUsage
+  usage: EveRuntimeUsage
 } {
   let finalCompletedMessage = ""
   let lastCompletedMessage = ""
@@ -8023,13 +8024,13 @@ function summarizeAshRuntimeEvents(events: unknown[]): {
   }
 }
 
-async function fetchAshRuntimeJson(
+async function fetchEveRuntimeJson(
   baseUrl: string,
   authorization: string,
   path: string
 ): Promise<{ bodyText: string; ok: boolean; payload: unknown; status: number }> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), ASH_DIAGNOSTIC_HTTP_TIMEOUT_MS)
+  const timeoutId = setTimeout(() => controller.abort(), EVE_DIAGNOSTIC_HTTP_TIMEOUT_MS)
 
   try {
     const response = await fetch(new URL(path, baseUrl), {
@@ -8057,55 +8058,55 @@ async function fetchAshRuntimeJson(
   }
 }
 
-async function fetchAshRuntimeSessionEvents(
+async function fetchEveRuntimeSessionEvents(
   baseUrl: string,
   authorization: string,
   sessionId: string
 ): Promise<unknown[]> {
   const encodedSessionId = encodeURIComponent(sessionId)
-  const response = await fetchAshRuntimeJson(
+  const response = await fetchEveRuntimeJson(
     baseUrl,
     authorization,
     `/api/runs/${encodedSessionId}/events?sortOrder=asc&limit=500`
   )
-  return response.ok ? extractAshRuntimeEvents(response.payload) : []
+  return response.ok ? extractEveRuntimeEvents(response.payload) : []
 }
 
-async function pollAshRuntimeSession(
+async function pollEveRuntimeSession(
   baseUrl: string,
   authorization: string,
   sessionId: string,
   progressContext?: ProgressContext | null,
-  diagnostics?: AshRuntimeDiagnostics
+  diagnostics?: EveRuntimeDiagnostics
 ): Promise<{
   rawEvents: string[]
   resultText: string
   terminalState: "waiting" | "completed"
-  usage: AshRuntimeUsage
+  usage: EveRuntimeUsage
 }> {
   const encodedSessionId = encodeURIComponent(sessionId)
-  const deadline = Date.now() + ASH_SESSION_POLL_TIMEOUT_MS
+  const deadline = Date.now() + EVE_SESSION_POLL_TIMEOUT_MS
   let lastError = ""
   let lastLogAt = 0
 
   while (Date.now() < deadline) {
     try {
-      const response = await fetchAshRuntimeJson(baseUrl, authorization, `/api/runs/${encodedSessionId}`)
+      const response = await fetchEveRuntimeJson(baseUrl, authorization, `/api/runs/${encodedSessionId}`)
       if (!response.ok) {
-        lastError = `run endpoint returned ${response.status}: ${formatAshDiagnosticText(response.bodyText, 300)}`
+        lastError = `run endpoint returned ${response.status}: ${formatEveDiagnosticText(response.bodyText, 300)}`
       } else {
-        const state = extractAshRuntimeSessionPollState(response.payload)
+        const state = extractEveRuntimeSessionPollState(response.payload)
         if (state === "failed") {
-          throw new Error(extractAshRuntimeSessionErrorText(response.payload))
+          throw new Error(extractEveRuntimeSessionErrorText(response.payload))
         }
 
         if (state === "completed") {
-          const events = await fetchAshRuntimeSessionEvents(baseUrl, authorization, sessionId).catch(() => [])
-          const eventSummary = summarizeAshRuntimeEvents(events)
-          const resultText = extractAshRuntimeTextFromPayload(response.payload) || eventSummary.resultText
+          const events = await fetchEveRuntimeSessionEvents(baseUrl, authorization, sessionId).catch(() => [])
+          const eventSummary = summarizeEveRuntimeEvents(events)
+          const resultText = extractEveRuntimeTextFromPayload(response.payload) || eventSummary.resultText
           if (!resultText && !eventSummary.hasRuntimeEvents && eventSummary.usage.totalTokens === 0) {
             throw new Error(
-              `ASH runtime session ${sessionId} completed without agent output after stream fallback. Treating this as a failed analysis session.`
+              `EVE runtime session ${sessionId} completed without agent output after stream fallback. Treating this as a failed analysis session.`
             )
           }
           await appendProgressLog(
@@ -8116,26 +8117,26 @@ async function pollAshRuntimeSession(
             rawEvents: eventSummary.rawEvents,
             resultText,
             terminalState: "completed",
-            usage: eventSummary.usage.totalTokens > 0 ? eventSummary.usage : normalizeAshRuntimeUsage(response.payload)
+            usage: eventSummary.usage.totalTokens > 0 ? eventSummary.usage : normalizeEveRuntimeUsage(response.payload)
           }
         }
 
         if (Date.now() - lastLogAt > 30000) {
           lastLogAt = Date.now()
-          await appendProgressLog(progressContext, `[ASH] Analysis session still running: ${sessionId}`)
+          await appendProgressLog(progressContext, `[EVE] Analysis session still running: ${sessionId}`)
         }
       }
     } catch (error) {
       lastError = formatErrorMessage(error)
     }
 
-    await new Promise((resolve) => setTimeout(resolve, ASH_SESSION_POLL_INTERVAL_MS))
+    await new Promise((resolve) => setTimeout(resolve, EVE_SESSION_POLL_INTERVAL_MS))
   }
 
   const diagnosticText = diagnostics ? await diagnostics(sessionId).catch((error) => formatErrorMessage(error)) : ""
   throw new Error(
     [
-      `Timed out waiting for ASH runtime session ${sessionId}`,
+      `Timed out waiting for EVE runtime session ${sessionId}`,
       lastError ? `Last error: ${lastError}` : "",
       diagnosticText ? `Diagnostics:\n${diagnosticText}` : ""
     ]
@@ -8144,25 +8145,25 @@ async function pollAshRuntimeSession(
   )
 }
 
-async function readAshRuntimeSessionStream(
+async function readEveRuntimeSessionStream(
   baseUrl: string,
   authorization: string,
   sessionId: string,
   streamPath?: string,
   progressContext?: ProgressContext | null,
-  diagnostics?: AshRuntimeDiagnostics
+  diagnostics?: EveRuntimeDiagnostics
 ): Promise<{
   rawEvents: string[]
   resultText: string
   terminalState: "waiting" | "completed"
-  usage: AshRuntimeUsage
+  usage: EveRuntimeUsage
 }> {
   const maxReconnectAttempts = 240
   const reconnectDelayMs = 1000
   const resolvedStreamPath =
     typeof streamPath === "string" && streamPath.trim().length > 0
       ? streamPath.trim()
-      : `/.well-known/ash/v1/sessions/${encodeURIComponent(sessionId)}/stream`
+      : `/eve/v1/dev3000/sessions/${encodeURIComponent(sessionId)}/stream`
 
   let resultText = ""
   let lastCompletedMessage = ""
@@ -8184,7 +8185,7 @@ async function readAshRuntimeSessionStream(
       try {
         details = await diagnostics(sessionId)
       } catch (error) {
-        details = `Failed to collect ASH runtime diagnostics: ${formatErrorMessage(error)}`
+        details = `Failed to collect EVE runtime diagnostics: ${formatErrorMessage(error)}`
       }
     }
 
@@ -8217,7 +8218,7 @@ async function readAshRuntimeSessionStream(
         }
         await appendProgressLog(
           progressContext,
-          `[ASH] Assistant message completed (${String(event.data?.finishReason || "unknown")}): ${message.slice(0, 160)}`
+          `[EVE] Assistant message completed (${String(event.data?.finishReason || "unknown")}): ${message.slice(0, 160)}`
         )
       }
     }
@@ -8227,7 +8228,7 @@ async function readAshRuntimeSessionStream(
       const context = typeof event.data?.context === "string" ? event.data.context : "command"
       await appendProgressLog(
         progressContext,
-        `[ASH] Sandbox command (${context}): ${formatClaudeOutputPreview(command, 180)}`
+        `[EVE] Sandbox command (${context}): ${formatClaudeOutputPreview(command, 180)}`
       )
     }
 
@@ -8236,8 +8237,8 @@ async function readAshRuntimeSessionStream(
       if (actions.length > 0) {
         await appendProgressLog(
           progressContext,
-          `[ASH] Running ${actions.length === 1 ? "action" : `${actions.length} actions`}: ${actions
-            .map(formatAshRuntimeActionRequest)
+          `[EVE] Running ${actions.length === 1 ? "action" : `${actions.length} actions`}: ${actions
+            .map(formatEveRuntimeActionRequest)
             .join(", ")}`
         )
       }
@@ -8245,14 +8246,14 @@ async function readAshRuntimeSessionStream(
 
     if (event.type === "action.result") {
       const status = typeof event.data?.status === "string" ? event.data.status : "completed"
-      const label = formatAshRuntimeActionResult(event.data?.result)
+      const label = formatEveRuntimeActionResult(event.data?.result)
       const errorMessage =
         event.data?.error && typeof event.data.error === "object"
           ? (event.data.error as { message?: unknown }).message
           : undefined
       await appendProgressLog(
         progressContext,
-        `[ASH] ${status === "failed" ? "Failed" : "Completed"} action: ${label}${
+        `[EVE] ${status === "failed" ? "Failed" : "Completed"} action: ${label}${
           typeof errorMessage === "string" && errorMessage.trim()
             ? ` (${formatClaudeOutputPreview(errorMessage, 160)})`
             : ""
@@ -8276,13 +8277,13 @@ async function readAshRuntimeSessionStream(
     }
 
     if (event.type === "input.requested") {
-      terminalError = "ASH runtime requested human input, which the workflow host does not support yet."
+      terminalError = "EVE runtime requested human input, which the workflow host does not support yet."
       return
     }
 
     if (event.type === "step.failed" || event.type === "turn.failed" || event.type === "session.failed") {
       terminalError =
-        typeof event.data?.message === "string" ? event.data.message : `ASH runtime failed during ${event.type}`
+        typeof event.data?.message === "string" ? event.data.message : `EVE runtime failed during ${event.type}`
       return
     }
 
@@ -8307,7 +8308,7 @@ async function readAshRuntimeSessionStream(
   ) => {
     const countAgainstLimit = options.countAgainstLimit ?? true
     if (countAgainstLimit && remainingReconnectAttempts <= 0) {
-      throw await buildRuntimeStreamFailure(`ASH runtime stream disconnected before a turn boundary: ${reason}`)
+      throw await buildRuntimeStreamFailure(`EVE runtime stream disconnected before a turn boundary: ${reason}`)
     }
     if (countAgainstLimit) {
       remainingReconnectAttempts -= 1
@@ -8315,7 +8316,7 @@ async function readAshRuntimeSessionStream(
     if (!options.quiet) {
       await appendProgressLog(
         progressContext,
-        `[ASH] Runtime stream disconnected; reconnecting from event ${rawEvents.length} (${reason})`
+        `[EVE] Runtime stream disconnected; reconnecting from event ${rawEvents.length} (${reason})`
       )
     }
     await new Promise((resolve) => setTimeout(resolve, reconnectDelayMs))
@@ -8329,11 +8330,11 @@ async function readAshRuntimeSessionStream(
 
     let streamResponse: Response
     const idleTimeoutMs =
-      rawEvents.length === 0 ? ASH_STREAM_INITIAL_IDLE_TIMEOUT_MS : ASH_STREAM_ACTIVE_IDLE_TIMEOUT_MS
+      rawEvents.length === 0 ? EVE_STREAM_INITIAL_IDLE_TIMEOUT_MS : EVE_STREAM_ACTIVE_IDLE_TIMEOUT_MS
     const remainingIdleMs = idleTimeoutMs - (Date.now() - lastEventAt)
     if (remainingIdleMs <= 0) {
       throw await buildRuntimeStreamFailure(
-        `ASH runtime stream produced no events for ${Math.round(idleTimeoutMs / 1000)}s (session ${sessionId}, received ${rawEvents.length} event(s)).`
+        `EVE runtime stream produced no events for ${Math.round(idleTimeoutMs / 1000)}s (session ${sessionId}, received ${rawEvents.length} event(s)).`
       )
     }
 
@@ -8344,7 +8345,7 @@ async function readAshRuntimeSessionStream(
         streamFetchTimedOut = true
         streamFetchController.abort()
       },
-      Math.min(remainingIdleMs, ASH_STREAM_RECONNECT_POLL_MS)
+      Math.min(remainingIdleMs, EVE_STREAM_RECONNECT_POLL_MS)
     )
     try {
       streamResponse = await fetch(streamUrl, {
@@ -8356,7 +8357,7 @@ async function readAshRuntimeSessionStream(
         await reconnect("stream request idle", { countAgainstLimit: false, quiet: true })
         continue
       }
-      if (isAshRuntimeStreamDisconnectError(error)) {
+      if (isEveRuntimeStreamDisconnectError(error)) {
         await reconnect(formatErrorMessage(error))
         continue
       }
@@ -8367,11 +8368,11 @@ async function readAshRuntimeSessionStream(
 
     if (!streamResponse.ok || !streamResponse.body) {
       const bodyText = await streamResponse.text()
-      if (isAshRuntimeRetryableStreamHttpFailure(streamResponse.status, bodyText)) {
-        await reconnect(`stream route returned ${streamResponse.status}: ${formatAshDiagnosticText(bodyText, 300)}`)
+      if (isEveRuntimeRetryableStreamHttpFailure(streamResponse.status, bodyText)) {
+        await reconnect(`stream route returned ${streamResponse.status}: ${formatEveDiagnosticText(bodyText, 300)}`)
         continue
       }
-      throw new Error(`ASH runtime stream failed (${streamResponse.status}): ${bodyText}`)
+      throw new Error(`EVE runtime stream failed (${streamResponse.status}): ${bodyText}`)
     }
 
     const decoder = new TextDecoder()
@@ -8384,18 +8385,18 @@ async function readAshRuntimeSessionStream(
     while (true) {
       try {
         const idleTimeoutMs =
-          rawEvents.length === 0 ? ASH_STREAM_INITIAL_IDLE_TIMEOUT_MS : ASH_STREAM_ACTIVE_IDLE_TIMEOUT_MS
+          rawEvents.length === 0 ? EVE_STREAM_INITIAL_IDLE_TIMEOUT_MS : EVE_STREAM_ACTIVE_IDLE_TIMEOUT_MS
         const remainingIdleMs = idleTimeoutMs - (Date.now() - lastEventAt)
         if (remainingIdleMs <= 0) {
           await reader.cancel().catch(() => {})
           throw await buildRuntimeStreamFailure(
-            `ASH runtime stream produced no events for ${Math.round(idleTimeoutMs / 1000)}s (session ${sessionId}, received ${rawEvents.length} event(s)).`
+            `EVE runtime stream produced no events for ${Math.round(idleTimeoutMs / 1000)}s (session ${sessionId}, received ${rawEvents.length} event(s)).`
           )
         }
 
-        const readResult = await readAshStreamChunkWithTimeout(
+        const readResult = await readEveStreamChunkWithTimeout(
           reader,
-          Math.min(remainingIdleMs, ASH_STREAM_RECONNECT_POLL_MS)
+          Math.min(remainingIdleMs, EVE_STREAM_RECONNECT_POLL_MS)
         )
         if ("timedOut" in readResult) {
           await reader.cancel().catch(() => {})
@@ -8428,7 +8429,7 @@ async function readAshRuntimeSessionStream(
           }
         }
       } catch (error) {
-        if (isAshRuntimeStreamDisconnectError(error)) {
+        if (isEveRuntimeStreamDisconnectError(error)) {
           disconnected = true
           disconnectReason = formatErrorMessage(error)
           break
@@ -8477,7 +8478,7 @@ async function readAshRuntimeSessionStream(
   }
 }
 
-function isAshRuntimeStreamDisconnectError(error: unknown): boolean {
+function isEveRuntimeStreamDisconnectError(error: unknown): boolean {
   if (error instanceof DOMException) {
     return error.name === "AbortError"
   }
@@ -8498,13 +8499,13 @@ function isAshRuntimeStreamDisconnectError(error: unknown): boolean {
   )
 }
 
-function isAshRuntimeAuthFailure(error: unknown): boolean {
+function isEveRuntimeAuthFailure(error: unknown): boolean {
   return /AI Gateway authentication failed|Invalid OIDC token|invalid[^\n]*oidc|unauthorized|(^|[^\d])401([^\d]|$)|(^|[^\d])403([^\d]|$)/i.test(
     formatErrorMessage(error)
   )
 }
 
-function isAshRuntimeRetryableStreamHttpFailure(status: number, bodyText: string): boolean {
+function isEveRuntimeRetryableStreamHttpFailure(status: number, bodyText: string): boolean {
   if (status < 500 || status > 599) {
     return false
   }
@@ -8525,20 +8526,20 @@ function formatErrorMessage(error: unknown): string {
   return String(error)
 }
 
-async function streamAshRuntimeTask(
+async function streamEveRuntimeTask(
   baseUrl: string,
   authorization: string,
   prompt: string,
   progressContext?: ProgressContext | null,
-  diagnostics?: AshRuntimeDiagnostics
+  diagnostics?: EveRuntimeDiagnostics
 ): Promise<{
   rawEvents: string[]
   resultText: string
   sessionId: string
   terminalState: "waiting" | "completed"
-  usage: AshRuntimeUsage
+  usage: EveRuntimeUsage
 }> {
-  const taskResponse = await fetch(`${baseUrl}${ASH_TASK_ROUTE_PATH}`, {
+  const taskResponse = await fetch(`${baseUrl}${EVE_TASK_ROUTE_PATH}`, {
     method: "POST",
     headers: {
       authorization,
@@ -8552,7 +8553,7 @@ async function streamAshRuntimeTask(
     const diagnosticText = diagnostics ? await diagnostics("task-start").catch(() => "") : ""
     throw new Error(
       [
-        `ASH runtime rejected message start (${taskResponse.status}): ${taskPayloadText}`,
+        `EVE runtime rejected message start (${taskResponse.status}): ${taskPayloadText}`,
         diagnosticText ? `Diagnostics:\n${diagnosticText}` : ""
       ]
         .filter(Boolean)
@@ -8577,7 +8578,7 @@ async function streamAshRuntimeTask(
     const responsePreview = taskPayloadText.trim() || "(empty response)"
     throw new Error(
       [
-        `ASH runtime task route returned invalid JSON (${taskResponse.status}): ${responsePreview}`,
+        `EVE runtime task route returned invalid JSON (${taskResponse.status}): ${responsePreview}`,
         diagnosticText ? `Diagnostics:\n${diagnosticText}` : ""
       ]
         .filter(Boolean)
@@ -8586,12 +8587,12 @@ async function streamAshRuntimeTask(
   }
   const sessionId = taskPayload.sessionId
   if (!sessionId) {
-    throw new Error("ASH runtime task route did not return a session id.")
+    throw new Error("EVE runtime task route did not return a session id.")
   }
   await appendProgressLog(progressContext, `[Agent] Analysis session started: ${sessionId}`)
-  const directTerminalState = extractAshRuntimeTaskTerminalState(taskPayload)
+  const directTerminalState = extractEveRuntimeTaskTerminalState(taskPayload)
   if (directTerminalState === "completed") {
-    const resultText = extractAshRuntimeTaskResultText(taskPayload)
+    const resultText = extractEveRuntimeTaskResultText(taskPayload)
     await appendProgressLog(
       progressContext,
       `[Agent] Analysis session ${directTerminalState}${resultText ? `: ${formatClaudeOutputPreview(resultText, 180)}` : "."}`
@@ -8601,16 +8602,16 @@ async function streamAshRuntimeTask(
       resultText,
       sessionId,
       terminalState: directTerminalState,
-      usage: normalizeAshRuntimeUsage(taskPayload.usage)
+      usage: normalizeEveRuntimeUsage(taskPayload.usage)
     }
   }
   if (directTerminalState === "waiting") {
-    await appendProgressLog(progressContext, `[ASH] Analysis session waiting: ${sessionId}`)
+    await appendProgressLog(progressContext, `[EVE] Analysis session waiting: ${sessionId}`)
   }
 
-  let streamResult: Awaited<ReturnType<typeof readAshRuntimeSessionStream>>
+  let streamResult: Awaited<ReturnType<typeof readEveRuntimeSessionStream>>
   try {
-    streamResult = await readAshRuntimeSessionStream(
+    streamResult = await readEveRuntimeSessionStream(
       baseUrl,
       authorization,
       sessionId,
@@ -8619,16 +8620,16 @@ async function streamAshRuntimeTask(
       diagnostics
     )
   } catch (error) {
-    if (isAshRuntimeAuthFailure(error)) {
+    if (isEveRuntimeAuthFailure(error)) {
       const message = formatErrorMessage(error)
       const diagnosticText = diagnostics ? await diagnostics(sessionId).catch(() => "") : ""
       await appendProgressLog(
         progressContext,
-        `[ASH] Runtime stream failed authentication; not falling back to session polling (${formatClaudeOutputPreview(message, 220)})`
+        `[EVE] Runtime stream failed authentication; not falling back to session polling (${formatClaudeOutputPreview(message, 220)})`
       )
       throw new Error(
         [
-          `ASH runtime failed to authenticate with AI Gateway: ${message}`,
+          `EVE runtime failed to authenticate with AI Gateway: ${message}`,
           diagnosticText ? `Diagnostics:\n${diagnosticText}` : ""
         ]
           .filter(Boolean)
@@ -8637,9 +8638,9 @@ async function streamAshRuntimeTask(
     }
     await appendProgressLog(
       progressContext,
-      `[ASH] Runtime stream unavailable; polling session (${formatClaudeOutputPreview(formatErrorMessage(error), 220)})`
+      `[EVE] Runtime stream unavailable; polling session (${formatClaudeOutputPreview(formatErrorMessage(error), 220)})`
     )
-    streamResult = await pollAshRuntimeSession(baseUrl, authorization, sessionId, progressContext, diagnostics)
+    streamResult = await pollEveRuntimeSession(baseUrl, authorization, sessionId, progressContext, diagnostics)
   }
 
   return {
@@ -8651,7 +8652,7 @@ async function streamAshRuntimeTask(
   }
 }
 
-async function runAshAgentInSandbox(
+async function runEveAgentInSandbox(
   sandbox: Sandbox,
   devUrl: string,
   beforeCls: number | null,
@@ -8668,7 +8669,7 @@ async function runAshAgentInSandbox(
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: DevAgentSkillRef[],
-  devAgentAshTarballUrl?: string,
+  devAgentEveTarballUrl?: string,
   bundleBaselineSummary?: string,
   gatewayAuthToken?: string,
   gatewayAuthSource?: string,
@@ -8689,16 +8690,16 @@ async function runAshAgentInSandbox(
   }
   costUsd: number
 }> {
-  if (!devAgentAshTarballUrl) {
-    throw new Error("ASH runtime execution requires a packaged ASH tarball.")
+  if (!devAgentEveTarballUrl) {
+    throw new Error("EVE runtime execution requires a packaged EVE tarball.")
   }
 
   const effectiveProjectRoot = projectDir
     ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}`
     : "/vercel/sandbox"
-  const { authorization, baseUrl, logPath, workflowDataDir } = await ensurePackagedAshRuntimeInSandbox(
+  const { authorization, baseUrl, logPath, workflowDataDir } = await ensurePackagedEveRuntimeInSandbox(
     sandbox,
-    devAgentAshTarballUrl,
+    devAgentEveTarballUrl,
     progressContext?.devAgentSpecHash,
     effectiveProjectRoot,
     gatewayAuthToken,
@@ -8714,7 +8715,7 @@ async function runAshAgentInSandbox(
     workflowTypeForPrompt !== "cls-fix"
   const skillLoadInstructions = buildDevAgentSkillLoadInstructions(devAgentSkillRefs, {
     includeD3k: includeD3kSkill,
-    includeAshRunbook: true
+    includeEveRunbook: true
   })
   const clsCodeHints =
     workflowTypeForPrompt === "cls-fix" ? await gatherClsCodeHints(sandbox, effectiveProjectRoot) : null
@@ -8723,7 +8724,7 @@ async function runAshAgentInSandbox(
     devAgentInstructions,
     devAgentActionSteps
   })
-  const taskPrompt = buildAshTaskPrompt({
+  const taskPrompt = buildEveTaskPrompt({
     workflowType: workflowTypeForPrompt,
     startPath,
     devUrl,
@@ -8743,14 +8744,14 @@ async function runAshAgentInSandbox(
 
   await appendProgressLog(
     progressContext,
-    `[ASH] Using packaged runtime for ${devAgentName || "dev agent"} (${gatewayAuthSource || "unknown auth"})`
+    `[EVE] Using packaged runtime for ${devAgentName || "dev agent"} (${gatewayAuthSource || "unknown auth"})`
   )
   const transcript: string[] = []
-  transcript.push("## ASH Runtime Session")
+  transcript.push("## EVE Runtime Session")
   transcript.push("")
   await appendProgressLog(progressContext, "[Agent] Analysis started")
-  const diagnostics: AshRuntimeDiagnostics = (sessionId) =>
-    collectAshRuntimeDiagnostics({
+  const diagnostics: EveRuntimeDiagnostics = (sessionId) =>
+    collectEveRuntimeDiagnostics({
       authorization,
       baseUrl,
       logPath,
@@ -8759,7 +8760,7 @@ async function runAshAgentInSandbox(
       sessionId,
       workflowDataDir
     })
-  const result = await streamAshRuntimeTask(baseUrl, authorization, taskPrompt.prompt, progressContext, diagnostics)
+  const result = await streamEveRuntimeTask(baseUrl, authorization, taskPrompt.prompt, progressContext, diagnostics)
 
   transcript.push(`### ${taskPrompt.label}`)
   transcript.push("")
@@ -8768,7 +8769,7 @@ async function runAshAgentInSandbox(
   transcript.push(taskPrompt.prompt)
   transcript.push("```")
   transcript.push("")
-  transcript.push("**ASH Runtime:**")
+  transcript.push("**EVE Runtime:**")
   transcript.push(result.resultText || "(no textual result)")
   transcript.push("")
   transcript.push(`**Session:** ${result.sessionId}`)
@@ -8783,9 +8784,9 @@ async function runAshAgentInSandbox(
   return {
     transcript: transcript.join("\n"),
     summary: result.resultText,
-    systemPrompt: "[ASH runtime]",
-    modelId: devAgentAiAgent || "ash-runtime",
-    skillsLoaded: getInstalledSkillNames(devAgentSkillRefs, { includeD3k: includeD3kSkill, includeAshRunbook: true }),
+    systemPrompt: "[EVE runtime]",
+    modelId: devAgentAiAgent || "eve-runtime",
+    skillsLoaded: getInstalledSkillNames(devAgentSkillRefs, { includeD3k: includeD3kSkill, includeEveRunbook: true }),
     usage: {
       promptTokens: result.usage.promptTokens,
       completionTokens: result.usage.completionTokens,
@@ -8802,7 +8803,7 @@ async function installDevAgentSkillsInSandbox(
   projectDir: string | undefined,
   devAgentSkillRefs: DevAgentSkillRef[] | undefined,
   progressContext?: ProgressContext | null,
-  options?: { includeD3k?: boolean; devAgentAshTarballUrl?: string }
+  options?: { includeD3k?: boolean; devAgentEveTarballUrl?: string }
 ): Promise<string[]> {
   const normalizeInstalledSkillName = (value?: string): string =>
     (value || "")
@@ -8814,8 +8815,8 @@ async function installDevAgentSkillsInSandbox(
 
   const installedSkillNames = new Set<string>()
   const packagedSkillNames = new Set<string>()
-  if (options?.devAgentAshTarballUrl) {
-    const packaged = await installPackagedAshSkillsInSandbox(sandbox, options.devAgentAshTarballUrl, progressContext)
+  if (options?.devAgentEveTarballUrl) {
+    const packaged = await installPackagedEveSkillsInSandbox(sandbox, options.devAgentEveTarballUrl, progressContext)
     for (const skillName of packaged.skillNames) {
       const normalized = normalizeInstalledSkillName(skillName)
       if (normalized) {
@@ -8826,7 +8827,7 @@ async function installDevAgentSkillsInSandbox(
   }
 
   const requestedSkills = [...(devAgentSkillRefs || [])]
-  const shouldAutoInstallPlatformSkills = !options?.devAgentAshTarballUrl
+  const shouldAutoInstallPlatformSkills = !options?.devAgentEveTarballUrl
   const hasVercelPlugin = requestedSkills.some((skill) => {
     const identifier = `${skill.id} ${skill.skillName} ${skill.displayName} ${skill.installArg}`.toLowerCase()
     return identifier.includes("vercel-plugin") || identifier.includes("vercel/vercel-plugin")
@@ -8901,10 +8902,10 @@ async function installDevAgentSkillsInSandbox(
 
 function buildDevAgentSkillLoadInstructions(
   devAgentSkillRefs: DevAgentSkillRef[] | undefined,
-  options?: { includeD3k?: boolean; includeAshRunbook?: boolean }
+  options?: { includeD3k?: boolean; includeEveRunbook?: boolean }
 ): string {
   const skillNames = getInstalledSkillNames(devAgentSkillRefs, options)
-  if (options?.includeAshRunbook) {
+  if (options?.includeEveRunbook) {
     skillNames.unshift("dev3000-agent-runbook")
   }
   if (skillNames.length === 1) {
@@ -9172,7 +9173,7 @@ function getWorkflowExecutionMaxTurns(workflowType: string): number {
 
 function buildWorkflowValidationHint(
   executionMode?: "dev-server" | "preview-pr",
-  runtime: "claude" | "ash" = "claude",
+  runtime: "claude" | "eve" = "claude",
   workflowType?: string
 ) {
   if (isDeepsecSecurityScanWorkflow(workflowType)) {
@@ -9183,12 +9184,12 @@ function buildWorkflowValidationHint(
   }
 
   if (executionMode === "preview-pr") {
-    return runtime === "ash"
+    return runtime === "eve"
       ? "Prepare preview/PR-ready changes and use lightweight validation before you conclude."
       : "Work from the codebase and preview validation, then prepare PR-ready changes."
   }
 
-  return runtime === "ash"
+  return runtime === "eve"
     ? "Validate meaningful changes with runtime evidence before you conclude."
     : "Use d3k logs, browser evidence, and runtime signals to validate each meaningful fix before you finish."
 }
@@ -9496,7 +9497,7 @@ function buildClaudeTurnPrompts({
   return prompts
 }
 
-function buildAshTaskPrompt({
+function buildEveTaskPrompt({
   workflowType,
   startPath,
   devUrl,
@@ -9529,7 +9530,7 @@ function buildAshTaskPrompt({
   beforeGrade: "good" | "needs-improvement" | "poor" | null
   codeHints?: string
 }): ClaudeTurnPrompt {
-  const runtimePrefix = buildAshRuntimePromptPrefix({
+  const runtimePrefix = buildEveRuntimePromptPrefix({
     devUrl,
     devAgentSandboxBrowser,
     skillLoadInstructions
@@ -9555,7 +9556,7 @@ function buildAshTaskPrompt({
 
   return {
     ...sharedPrompt,
-    label: "ASH task run",
+    label: "EVE task run",
     prompt: `${runtimePrefix}\n\n${sharedPrompt.prompt}`
   }
 }
@@ -10499,7 +10500,7 @@ async function runAgentWithDiagnoseTool(
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: DevAgentSkillRef[],
-  devAgentAshTarballUrl?: string,
+  devAgentEveTarballUrl?: string,
   bundleBaselineSummary?: string,
   gatewayAuthToken?: string,
   gatewayAuthSource?: string,
@@ -10529,7 +10530,7 @@ async function runAgentWithDiagnoseTool(
     workflowTypeForPrompt !== "cls-fix"
   const skillLoadInstructions = buildDevAgentSkillLoadInstructions(devAgentSkillRefs, {
     includeD3k: includeD3kSkill,
-    includeAshRunbook: Boolean(devAgentAshTarballUrl)
+    includeEveRunbook: Boolean(devAgentEveTarballUrl)
   })
   const browserGuidance = buildDevAgentSandboxBrowserGuidance(devAgentSandboxBrowser)
   const modelSelection = resolveClaudeModelSelection(devAgentAiAgent)
@@ -10566,10 +10567,10 @@ async function runAgentWithDiagnoseTool(
     })
   }
 
-  if (devAgentAshTarballUrl) {
+  if (devAgentEveTarballUrl) {
     try {
       await appendProgressLog(progressContext, `[Agent] Starting ${devAgentName || "agent"}...`)
-      return await runAshAgentInSandbox(
+      return await runEveAgentInSandbox(
         sandbox,
         devUrl,
         beforeCls,
@@ -10586,7 +10587,7 @@ async function runAgentWithDiagnoseTool(
         devAgentAiAgent,
         effectiveActionSteps,
         devAgentSkillRefs,
-        devAgentAshTarballUrl,
+        devAgentEveTarballUrl,
         bundleBaselineSummary,
         effectiveGatewayAuthToken,
         effectiveGatewayAuthSource,
@@ -10638,7 +10639,7 @@ async function runAgentWithDiagnoseTool(
     beforeGrade,
     codeHints: clsCodeHints ?? undefined,
     devAgentSandboxBrowser,
-    hasPackagedRunbook: Boolean(devAgentAshTarballUrl)
+    hasPackagedRunbook: Boolean(devAgentEveTarballUrl)
   })
 
   const transcript: string[] = []

@@ -20,8 +20,8 @@ const VERCEL_PLUGIN_INSTALL_ARG = "vercel/vercel-plugin"
 const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
 const D3K_NATIVE_PACKAGE = "@d3k/linux-x64@latest"
 export const D3K_DEV_SERVER_PORT = 3000
-export const D3K_ASH_RUNTIME_PORT = 3100
-const D3K_SANDBOX_EXPOSED_PORTS = [D3K_DEV_SERVER_PORT, D3K_ASH_RUNTIME_PORT]
+export const D3K_EVE_RUNTIME_PORT = 3100
+const D3K_SANDBOX_EXPOSED_PORTS = [D3K_DEV_SERVER_PORT, D3K_EVE_RUNTIME_PORT]
 
 // ============================================================
 // TIMING UTILITIES

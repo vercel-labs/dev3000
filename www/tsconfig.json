@@ -23,5 +23,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
-  "exclude": ["node_modules", "ash-agent", "deepsec"]
+  "exclude": ["node_modules", "eve-agent", "ash-agent", "deepsec"]
 }

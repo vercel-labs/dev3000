@@ -17,7 +17,7 @@ export const changelog: Release[] = [
       "Fix Dependabot dependency alerts",
       "Guard d3k auth browser flows",
       "Fix skill run report blob mirroring",
-      "Update generated ASH runner to 0.61",
+      "Update generated Eve runner to 0.17",
       "Require mirror secret for report blob writes"
     ]
   },

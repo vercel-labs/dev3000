@@ -16,7 +16,7 @@ export function getFinalSummaryMarkdown(agentAnalysis?: string) {
   return transcriptFinalSummaryMatch?.[1]?.trim() || ""
 }
 
-export function extractAshFinalMessage(agentAnalysis?: string): string {
+export function extractEveFinalMessage(agentAnalysis?: string): string {
   if (!agentAnalysis) return ""
 
   const markerIndex = agentAnalysis.indexOf("**Stream Events:**")
@@ -63,7 +63,7 @@ export function getGeneratedReportMarkdown(report: WorkflowReport): string {
 
   if (report.workflowType === "deepsec-security-scan") {
     return redactSensitiveReportText(
-      extractAshFinalMessage(report.agentAnalysis) || getFinalSummaryMarkdown(report.agentAnalysis)
+      extractEveFinalMessage(report.agentAnalysis) || getFinalSummaryMarkdown(report.agentAnalysis)
     )
   }
 

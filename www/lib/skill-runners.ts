@@ -3,8 +3,8 @@ import { get, list, put } from "@vercel/blob"
 import type {
   DevAgent,
   DevAgentActionStep,
-  DevAgentAshArtifact,
   DevAgentAuthor,
+  DevAgentEveArtifact,
   DevAgentSkillRef,
   DevAgentTeam
 } from "@/lib/dev-agents"
@@ -15,7 +15,7 @@ import {
   DEEPSEC_DEV_AGENT_INSTRUCTIONS,
   DEEPSEC_DEV_AGENT_SUCCESS_EVAL,
   DEEPSEC_SKILL_INSTALL_ARG,
-  ensureDevAgentAshArtifactPrepared,
+  ensureDevAgentEveArtifactPrepared,
   VERCEL_OPTIMIZE_DEV_AGENT_ACTION_STEPS,
   VERCEL_OPTIMIZE_DEV_AGENT_DESCRIPTION,
   VERCEL_OPTIMIZE_DEV_AGENT_INSTRUCTIONS,
@@ -58,7 +58,7 @@ export interface SkillRunnerRecord {
   executionProfile?: SkillRunnerExecutionProfile
   successEval?: string
   earlyExitEval?: string
-  ashArtifact?: DevAgentAshArtifact
+  eveArtifact?: DevAgentEveArtifact
 }
 
 interface SkillRunnerTeamState {
@@ -704,6 +704,7 @@ export async function listSkillRunnerTeamSettings(teams: DevAgentTeam[]): Promis
 function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillRunnerUsageSummary>): DevAgent {
   const usage = usageMap.get(record.id)
   const executionProfile = getExecutionProfile(record)
+  const eveArtifact = record.eveArtifact
 
   if (executionProfile === "deepsec") {
     return {
@@ -728,7 +729,7 @@ function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillR
       supportsPathInput: false,
       supportsPullRequest: false,
       successEval: DEEPSEC_DEV_AGENT_SUCCESS_EVAL,
-      ashArtifact: record.ashArtifact,
+      eveArtifact,
       runnerCanonicalPath: record.canonicalPath,
       runnerSourceUrl: record.sourceUrl,
       runnerSourceKind: record.sourceKind,
@@ -759,7 +760,7 @@ function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillR
       supportsPathInput: false,
       supportsPullRequest: false,
       successEval: VERCEL_OPTIMIZE_DEV_AGENT_SUCCESS_EVAL,
-      ashArtifact: record.ashArtifact,
+      eveArtifact,
       runnerCanonicalPath: record.canonicalPath,
       runnerSourceUrl: record.sourceUrl,
       runnerSourceKind: record.sourceKind,
@@ -787,7 +788,7 @@ function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillR
     supportsPathInput: true,
     supportsPullRequest: true,
     successEval: buildSkillRunnerSuccessEval(record.displayName),
-    ashArtifact: record.ashArtifact,
+    eveArtifact,
     runnerCanonicalPath: record.canonicalPath,
     runnerSourceUrl: record.sourceUrl,
     runnerSourceKind: record.sourceKind,
@@ -1033,11 +1034,11 @@ export async function getSkillRunnerForExecution(
       await listSkillRunnerUsageStats()
     )
 
-    const prepared = await ensureDevAgentAshArtifactPrepared(devAgent)
+    const prepared = await ensureDevAgentEveArtifactPrepared(devAgent)
     return {
       devAgent: {
         ...devAgent,
-        ashArtifact: prepared.artifact
+        eveArtifact: prepared.artifact
       },
       validationWarning: defaultSeed.validationWarning,
       canonicalPath: details.canonicalPath
@@ -1083,14 +1084,14 @@ export async function getSkillRunnerForExecution(
     updatedAt: now
   }
   let devAgent = applyUsageCount(refreshed, await listSkillRunnerUsageStats())
-  const prepared = await ensureDevAgentAshArtifactPrepared(devAgent)
+  const prepared = await ensureDevAgentEveArtifactPrepared(devAgent)
   devAgent = {
     ...devAgent,
-    ashArtifact: prepared.artifact
+    eveArtifact: prepared.artifact
   }
   state.imported[existingIndex] = {
     ...refreshed,
-    ashArtifact: prepared.artifact
+    eveArtifact: prepared.artifact
   }
   state.updatedAt = now
   await saveTeamSkillRunnerState(state)

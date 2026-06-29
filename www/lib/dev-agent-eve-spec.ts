@@ -4,22 +4,22 @@ import path from "node:path"
 import type {
   DevAgentActionStep,
   DevAgentAiAgent,
-  DevAgentAshCompiledSpec,
   DevAgentEarlyExitMode,
   DevAgentEarlyExitRule,
+  DevAgentEveCompiledSpec,
   DevAgentExecutionMode,
   DevAgentSandboxBrowser,
   DevAgentSkillRef
 } from "@/lib/dev-agents"
 
-const ASH_PACKAGE_NAME = "experimental-ash"
-const ASH_PACKAGE_VERSION = "0.61.0"
-const ASH_AI_PACKAGE_VERSION = "7.0.0-canary.159"
-const ASH_RUNTIME_VERSION = `${ASH_PACKAGE_NAME}@${ASH_PACKAGE_VERSION}`
-const ASH_ARTIFACT_FORMAT_VERSION = 16
+const EVE_PACKAGE_NAME = "eve"
+const EVE_PACKAGE_VERSION = "0.17.0"
+const EVE_AI_PACKAGE_VERSION = "^7.0.0"
+const EVE_RUNTIME_VERSION = `${EVE_PACKAGE_NAME}@${EVE_PACKAGE_VERSION}`
+const EVE_ARTIFACT_FORMAT_VERSION = 17
 
-export interface DevAgentAshArtifact {
-  framework: "experimental-ash"
+export interface DevAgentEveArtifact {
+  framework: "eve"
   revision: number
   specHash: string
   generatedAt: string
@@ -28,22 +28,22 @@ export interface DevAgentAshArtifact {
   sourceLabel: string
   systemPrompt: string
   packagedSkills?: string[]
-  compiledSpec?: DevAgentAshCompiledSpec
+  compiledSpec?: DevAgentEveCompiledSpec
   tarballUrl?: string
 }
 
-export interface DevAgentAshSource {
+export interface DevAgentEveSource {
   packageName: string
   packageVersion: string
   systemPrompt: string
   sourceLabel: string
   specHash: string
   packagedSkills: string[]
-  compiledSpec: DevAgentAshCompiledSpec
+  compiledSpec: DevAgentEveCompiledSpec
   files: Array<{ path: string; content: string }>
 }
 
-export interface DevAgentAshInput {
+export interface DevAgentEveInput {
   id: string
   name: string
   description: string
@@ -92,12 +92,12 @@ function formatAiAgent(aiAgent?: DevAgentAiAgent): string {
   return "anthropic/claude-opus-4.6"
 }
 
-function isDeepSecAshInput(input: DevAgentAshInput): boolean {
+function isDeepSecEveInput(input: DevAgentEveInput): boolean {
   return input.id.trim().toLowerCase() === "deepsec" || input.name.trim().toLowerCase() === "deepsec security scan"
 }
 
-function renderDeepSecRuntimeNotes(input: DevAgentAshInput): string {
-  if (!isDeepSecAshInput(input)) return ""
+function renderDeepSecRuntimeNotes(input: DevAgentEveInput): string {
+  if (!isDeepSecEveInput(input)) return ""
 
   return `## DeepSec Runtime Notes
 
@@ -107,7 +107,7 @@ function renderDeepSecRuntimeNotes(input: DevAgentAshInput): string {
 }
 
 function renderDisabledFrameworkTool(): string {
-  return `import { disableTool } from "experimental-ash/tools";
+  return `import { disableTool } from "eve/tools";
 
 export default disableTool();
 `
@@ -174,11 +174,11 @@ function formatEarlyExitRule(rule?: DevAgentEarlyExitRule): string {
   return `${metricLabel} ${rule.operator} "${rule.valueString ?? ""}".`
 }
 
-function createCanonicalSpec(input: DevAgentAshInput): DevAgentAshCompiledSpec {
+function createCanonicalSpec(input: DevAgentEveInput): DevAgentEveCompiledSpec {
   return {
     schemaVersion: 1,
-    artifactFormatVersion: ASH_ARTIFACT_FORMAT_VERSION,
-    ashRuntimeVersion: ASH_RUNTIME_VERSION,
+    artifactFormatVersion: EVE_ARTIFACT_FORMAT_VERSION,
+    eveRuntimeVersion: EVE_RUNTIME_VERSION,
     createdAt: input.createdAt,
     id: input.id,
     name: input.name.trim(),
@@ -220,7 +220,7 @@ function createCanonicalSpec(input: DevAgentAshInput): DevAgentAshCompiledSpec {
   }
 }
 
-function renderExecutionRunbookSkill(input: DevAgentAshInput): string {
+function renderExecutionRunbookSkill(input: DevAgentEveInput): string {
   const normalizedInstructions = normalizeMultiline(input.instructions)
   const actionPlan = input.actionSteps?.length
     ? input.actionSteps.map((step, index) => formatActionStep(step, index)).join("\n")
@@ -260,20 +260,20 @@ ${successEval}
 `
 }
 
-function renderAshRuntimeMessageChannel(): string {
-  return `import { httpBasic } from "experimental-ash/channels/auth";
-import { ashChannel } from "experimental-ash/channels/ash";
+function renderEveRuntimeMessageChannel(): string {
+  return `import { httpBasic } from "eve/channels/auth";
+import { eveChannel } from "eve/channels/eve";
 
-const username = process.env.DEV3000_ASH_RUNTIME_USERNAME || "dev3000";
-const runtimePassword = process.env.DEV3000_ASH_RUNTIME_PASSWORD;
+const username = process.env.DEV3000_EVE_RUNTIME_USERNAME || "dev3000";
+const runtimePassword = process.env.DEV3000_EVE_RUNTIME_PASSWORD;
 
 if (!runtimePassword) {
-  throw new Error("DEV3000_ASH_RUNTIME_PASSWORD is required for the generated Ash runtime route.");
+  throw new Error("DEV3000_EVE_RUNTIME_PASSWORD is required for the generated Eve runtime route.");
 }
 
 const password = runtimePassword;
 
-export default ashChannel({
+export default eveChannel({
   auth: httpBasic({
     username,
     password,
@@ -282,18 +282,18 @@ export default ashChannel({
 `
 }
 
-function renderAshRuntimeTaskChannel(): string {
-  return `import { defineChannel, GET, POST } from "experimental-ash/channels";
-import { createUnauthorizedResponse, verifyHttpBasic } from "experimental-ash/channels/auth";
+function renderEveRuntimeTaskChannel(): string {
+  return `import { defineChannel, GET, POST } from "eve/channels";
+import { createUnauthorizedResponse, verifyHttpBasic } from "eve/channels/auth";
 
-const username = process.env.DEV3000_ASH_RUNTIME_USERNAME || "dev3000";
-const runtimePassword = process.env.DEV3000_ASH_RUNTIME_PASSWORD;
-const healthRoute = "/.well-known/ash/v1/health";
-const taskRoute = "/.well-known/ash/v1/task";
-const streamRoute = "/.well-known/ash/v1/sessions/:sessionId/stream";
+const username = process.env.DEV3000_EVE_RUNTIME_USERNAME || "dev3000";
+const runtimePassword = process.env.DEV3000_EVE_RUNTIME_PASSWORD;
+const healthRoute = "/eve/v1/dev3000/health";
+const taskRoute = "/eve/v1/dev3000/task";
+const streamRoute = "/eve/v1/dev3000/sessions/:sessionId/stream";
 
 if (!runtimePassword) {
-  throw new Error("DEV3000_ASH_RUNTIME_PASSWORD is required for the generated Ash runtime route.");
+  throw new Error("DEV3000_EVE_RUNTIME_PASSWORD is required for the generated Eve runtime route.");
 }
 
 const password = runtimePassword;
@@ -306,7 +306,7 @@ function authenticate(request: Request) {
 
     if (!auth.ok) {
       return createUnauthorizedResponse({
-        challenges: [{ scheme: "Basic", parameters: { realm: "ash-task" } }],
+        challenges: [{ scheme: "Basic", parameters: { realm: "eve-task" } }],
       });
     }
 
@@ -382,7 +382,7 @@ export default defineChannel({
       mode: "task",
     });
 
-      const streamPath = \`/.well-known/ash/v1/sessions/\${encodeURIComponent(session.id)}/stream\`;
+      const streamPath = \`/eve/v1/dev3000/sessions/\${encodeURIComponent(session.id)}/stream\`;
 
       return Response.json(
         {
@@ -418,9 +418,9 @@ export default defineChannel({
           headers: {
             "cache-control": "no-store",
             "content-type": "application/x-ndjson; charset=utf-8",
-            "x-ash-session-id": sessionId,
-            "x-ash-stream-format": "ndjson",
-            "x-ash-stream-version": "15",
+            "x-eve-session-id": sessionId,
+            "x-eve-stream-format": "ndjson",
+            "x-eve-stream-version": "15",
           },
         });
       } catch {
@@ -449,7 +449,7 @@ import {
   type SandboxSession,
   type SandboxSpawnOptions,
   type SandboxWriteFileOptions,
-} from "experimental-ash/sandbox";
+} from "eve/sandbox";
 
 const projectRoot = process.env.DEV3000_PROJECT_ROOT?.trim();
 const workspaceRoot = "/workspace";
@@ -465,7 +465,7 @@ const ensureBunAvailableScript = [
   'for candidate in "$BUN_INSTALL/bin/bun" "/usr/local/bin/bun"; do if [ -x "$candidate" ]; then BUN_BIN="$candidate"; break; fi; done',
   'if [ -z "$BUN_BIN" ]; then FOUND_BUN="$(PATH="/usr/local/bin:/usr/bin:/bin:$PATH" command -v bun || true)"; if [ -n "$FOUND_BUN" ] && [ "$FOUND_BUN" != "$HOME/.local/bin/bun" ]; then BUN_BIN="$FOUND_BUN"; fi; fi',
   'if [ -z "$BUN_BIN" ]; then curl -fsSL https://bun.sh/install | bash; BUN_BIN="$BUN_INSTALL/bin/bun"; fi',
-  'if [ ! -x "$BUN_BIN" ]; then echo "Bun unavailable after ASH sandbox bootstrap" >&2; exit 1; fi',
+  'if [ ! -x "$BUN_BIN" ]; then echo "Bun unavailable after EVE sandbox bootstrap" >&2; exit 1; fi',
   'BUN_BIN="$(readlink -f "$BUN_BIN" 2>/dev/null || printf "%s" "$BUN_BIN")"',
   'mkdir -p "$HOME/.local/bin"',
   'rm -f "$HOME/.local/bin/bun" "$HOME/.local/bin/bunx"',
@@ -478,7 +478,7 @@ async function ensureBunAvailable(sandbox: SandboxSession) {
   const result = await sandbox.run({ command: ensureBunAvailableScript });
   if (result.exitCode !== 0) {
     const output = [result.stderr, result.stdout].filter(Boolean).join("\\n").trim();
-    throw new Error(\`Failed to prepare Bun in ASH sandbox: \${output || "unknown error"}\`);
+    throw new Error(\`Failed to prepare Bun in EVE sandbox: \${output || "unknown error"}\`);
   }
 }
 
@@ -609,7 +609,7 @@ async function pathExists(input: string): Promise<boolean> {
 
 async function prepareWorkspace() {
   if (!projectRoot) {
-    throw new Error("DEV3000_PROJECT_ROOT is required for the dev3000 ASH sandbox backend.");
+    throw new Error("DEV3000_PROJECT_ROOT is required for the dev3000 EVE sandbox backend.");
   }
 
   const mkdirResult = await runHostShell(
@@ -621,7 +621,7 @@ async function prepareWorkspace() {
     "/",
   );
   if (mkdirResult.exitCode !== 0) {
-    throw new Error(\`Failed to prepare ASH workspace: \${mkdirResult.stderr || mkdirResult.stdout || "unknown error"}\`);
+    throw new Error(\`Failed to prepare EVE workspace: \${mkdirResult.stderr || mkdirResult.stdout || "unknown error"}\`);
   }
 
   await ensureBunAvailable(createHostSession("bootstrap"));
@@ -822,7 +822,7 @@ export default defineSandbox({
 
     const repoCheck = await sandbox.run({ command: "test -d /workspace/repo && test -f /workspace/repo/package.json" });
     if (repoCheck.exitCode !== 0) {
-      throw new Error("ASH sandbox workspace is missing /workspace/repo.");
+      throw new Error("EVE sandbox workspace is missing /workspace/repo.");
     }
   },
 });
@@ -912,11 +912,11 @@ if (patchedCount === 0) {
 `
 }
 
-function renderGeneratedAgentDefinition(input: DevAgentAshInput): string {
+function renderGeneratedAgentDefinition(input: DevAgentEveInput): string {
   const preferredModel = escapeTypeScriptString(formatAiAgent(input.aiAgent))
 
   return `import { createGateway } from "ai";
-import { defineAgent } from "experimental-ash";
+import { defineAgent } from "eve";
 
 const preferredModel = "${preferredModel}";
 const explicitOidcToken = process.env.VERCEL_OIDC_TOKEN?.trim() || "";
@@ -958,7 +958,7 @@ export default defineAgent({
 `
 }
 
-function renderSystemPrompt(input: DevAgentAshInput): string {
+function renderSystemPrompt(input: DevAgentEveInput): string {
   const actionSteps = input.actionSteps?.length
     ? input.actionSteps.map((step, index) => formatActionStep(step, index)).join("\n")
     : "No explicit action-step choreography is configured. Use the authored instructions as the primary task."
@@ -1012,7 +1012,7 @@ ${successEval}
 `
 }
 
-function renderRuntimeContractLayer(input: DevAgentAshInput): string {
+function renderRuntimeContractLayer(input: DevAgentEveInput): string {
   const lines = [
     `This agent was generated from a dev3000 dev-agent spec.`,
     `Execution mode: ${formatExecutionMode(input.executionMode)}`,
@@ -1027,7 +1027,7 @@ function renderRuntimeContractLayer(input: DevAgentAshInput): string {
   return lines.join("\n")
 }
 
-function renderSkillsLayer(input: DevAgentAshInput): string {
+function renderSkillsLayer(input: DevAgentEveInput): string {
   if (input.skillRefs.length === 0) {
     return "No external skills are configured for this agent."
   }
@@ -1039,7 +1039,7 @@ function renderSkillsLayer(input: DevAgentAshInput): string {
   ].join("\n")
 }
 
-function renderEvaluationLayer(input: DevAgentAshInput): string {
+function renderEvaluationLayer(input: DevAgentEveInput): string {
   return [
     `Success eval: ${normalizeMultiline(input.successEval) || "none configured"}`,
     `Early exit mode: ${input.earlyExitMode || "none"}`,
@@ -1048,16 +1048,16 @@ function renderEvaluationLayer(input: DevAgentAshInput): string {
   ].join("\n")
 }
 
-function renderReadme(input: DevAgentAshInput, revision: number, specHash: string): string {
+function renderReadme(input: DevAgentEveInput, revision: number, specHash: string): string {
   return `# ${input.name.trim()}
 
-Generated by dev3000 as an ASH-compatible agent package.
+Generated by dev3000 as an EVE-compatible agent package.
 
 - Dev Agent ID: \`${input.id}\`
 - Revision: \`v${revision}\`
 - Spec hash: \`${specHash}\`
 - Generated from: dev3000 create/edit form
-- Runtime target: ${ASH_RUNTIME_VERSION}
+- Runtime target: ${EVE_RUNTIME_VERSION}
 
 This package is a deterministic build artifact of the stored dev-agent spec. The source of truth remains the dev-agent configuration in dev3000.
 `
@@ -1085,7 +1085,7 @@ async function collectTextFiles(baseDir: string, relativeDir = ""): Promise<Arra
 }
 
 async function resolvePackagedSkillFiles(
-  input: DevAgentAshInput
+  input: DevAgentEveInput
 ): Promise<{ packagedSkills: string[]; files: Array<{ path: string; content: string }> }> {
   const packagedSkills: string[] = []
   const files: Array<{ path: string; content: string }> = []
@@ -1132,7 +1132,7 @@ async function resolvePackagedSkillFiles(
   return { packagedSkills, files }
 }
 
-export async function createDevAgentAshSource(input: DevAgentAshInput, revision: number): Promise<DevAgentAshSource> {
+export async function createDevAgentEveSource(input: DevAgentEveInput, revision: number): Promise<DevAgentEveSource> {
   const canonicalSpec = createCanonicalSpec(input)
   const specHash = createHash("sha256").update(JSON.stringify(canonicalSpec)).digest("hex")
   const slug = slugify(input.name) || input.id
@@ -1142,7 +1142,7 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
   const sourceLabel = `${input.name.trim()} v${revision}`
   const packagedSkillData = await resolvePackagedSkillFiles(input)
   const packagedSkills = [...packagedSkillData.packagedSkills, "dev3000-agent-runbook"]
-  const disabledFrameworkTools = isDeepSecAshInput(input)
+  const disabledFrameworkTools = isDeepSecEveInput(input)
     ? [
         {
           path: "agent/tools/read_file.ts",
@@ -1165,14 +1165,14 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
           private: true,
           type: "module",
           scripts: {
-            build: "ash build",
-            dev: "ash dev",
+            build: "eve build",
+            dev: "eve dev",
             "patch-workflow-world": "node scripts/patch-workflow-world-local.mjs",
             typecheck: "tsgo"
           },
           dependencies: {
-            ai: ASH_AI_PACKAGE_VERSION,
-            [ASH_PACKAGE_NAME]: ASH_PACKAGE_VERSION,
+            ai: EVE_AI_PACKAGE_VERSION,
+            [EVE_PACKAGE_NAME]: EVE_PACKAGE_VERSION,
             zod: "^4.3.6"
           },
           devDependencies: {
@@ -1229,12 +1229,12 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
       content: renderSkillsLayer(input)
     },
     {
-      path: "agent/channels/ash.ts",
-      content: renderAshRuntimeMessageChannel()
+      path: "agent/channels/eve.ts",
+      content: renderEveRuntimeMessageChannel()
     },
     {
       path: "agent/channels/dev3000.ts",
-      content: renderAshRuntimeTaskChannel()
+      content: renderEveRuntimeTaskChannel()
     },
     {
       path: "agent/sandbox/sandbox.ts",
@@ -1283,11 +1283,11 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
   }
 }
 
-export function createDevAgentAshArtifactDescriptor(
-  input: DevAgentAshInput,
+export function createDevAgentEveArtifactDescriptor(
+  input: DevAgentEveInput,
   revision = 1,
   generatedAt = new Date().toISOString()
-): DevAgentAshArtifact {
+): DevAgentEveArtifact {
   const canonicalSpec = createCanonicalSpec(input)
   const specHash = createHash("sha256").update(JSON.stringify(canonicalSpec)).digest("hex")
   const slug = slugify(input.name) || input.id
@@ -1296,7 +1296,7 @@ export function createDevAgentAshArtifactDescriptor(
   const sourceLabel = `${input.name.trim()} v${revision}`
   const systemPrompt = renderSystemPrompt(input)
   return {
-    framework: "experimental-ash",
+    framework: "eve",
     revision,
     specHash,
     generatedAt,

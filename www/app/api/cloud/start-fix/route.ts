@@ -4,7 +4,7 @@ import { after } from "next/server"
 import { type StartOptions, start } from "workflow/api"
 import { getCurrentUserFromRequest } from "@/lib/auth"
 import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
-import { type DevAgent, ensureDevAgentAshArtifactPrepared, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
+import { type DevAgent, ensureDevAgentEveArtifactPrepared, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
 import { describeOidcClaimsForLog, getOidcSandboxBinding, isOidcTokenBoundToProject } from "@/lib/oidc-token-binding"
 import { isSelfHostedSkillRunnerRuntime } from "@/lib/skill-runner-runtime"
 import {
@@ -406,13 +406,17 @@ function parseForwardedSkillRunner(
   if (typeof devAgent.instructions !== "string") return null
   if (!Array.isArray(devAgent.skillRefs)) return null
 
-  const ashArtifact = devAgent.ashArtifact
-  if (!isRecord(ashArtifact) || typeof ashArtifact.tarballUrl !== "string" || !ashArtifact.tarballUrl.trim()) {
+  const eveArtifact = devAgent.eveArtifact
+  if (!isRecord(eveArtifact) || typeof eveArtifact.tarballUrl !== "string" || !eveArtifact.tarballUrl.trim()) {
     return null
   }
+  const forwardedEveArtifact = eveArtifact as unknown as DevAgent["eveArtifact"]
 
   return {
-    devAgent: devAgent as unknown as DevAgent,
+    devAgent: {
+      ...(devAgent as unknown as DevAgent),
+      eveArtifact: forwardedEveArtifact
+    },
     canonicalPath: typeof value.canonicalPath === "string" ? value.canonicalPath : undefined,
     validationWarning: typeof value.validationWarning === "string" ? value.validationWarning : undefined
   }
@@ -629,7 +633,7 @@ export async function POST(request: Request) {
   let workflowType: WorkflowType = "cls-fix"
   let devAgent: DevAgent | null = null
   let runnerKind: "dev-agent" | "skill-runner" = "dev-agent"
-  let ashArtifactState: "existing" | "reused" | "stored" | null = null
+  let eveArtifactState: "existing" | "reused" | "stored" | null = null
   let customPrompt: string | undefined
   let crawlDepth: number | "all" | undefined
   let analysisTargetType: "vercel-project" | "url" = "vercel-project"
@@ -859,10 +863,10 @@ export async function POST(request: Request) {
         devAgent = forwardedSkillRunner.devAgent
         skillRunnerCanonicalPath = forwardedSkillRunner.canonicalPath
         skillRunnerValidationWarning = forwardedSkillRunner.validationWarning
-        ashArtifactState = "reused"
+        eveArtifactState = "reused"
         workflowType = devAgent.legacyWorkflowType || "prompt"
         workflowLog(
-          `[Start Fix] Using forwarded skill runner ASH app: ${devAgent.ashArtifact?.sourceLabel || devAgent.name} (${devAgent.ashArtifact?.specHash?.slice(0, 8) || "unknown"})`
+          `[Start Fix] Using forwarded skill runner EVE app: ${devAgent.eveArtifact?.sourceLabel || devAgent.name} (${devAgent.eveArtifact?.specHash?.slice(0, 8) || "unknown"})`
         )
       } else {
         const preparedSkillRunner = await getSkillRunnerForExecution(
@@ -893,10 +897,10 @@ export async function POST(request: Request) {
         devAgent = preparedSkillRunner.devAgent
         skillRunnerCanonicalPath = preparedSkillRunner.canonicalPath
         skillRunnerValidationWarning = preparedSkillRunner.validationWarning
-        ashArtifactState = "reused"
+        eveArtifactState = "reused"
         workflowType = devAgent.legacyWorkflowType || "prompt"
         workflowLog(
-          `[Start Fix] Reusing ASH app: ${preparedSkillRunner.devAgent.ashArtifact?.sourceLabel || devAgent.name} (${preparedSkillRunner.devAgent.ashArtifact?.specHash?.slice(0, 8) || "unknown"})`
+          `[Start Fix] Reusing EVE app: ${preparedSkillRunner.devAgent.eveArtifact?.sourceLabel || devAgent.name} (${preparedSkillRunner.devAgent.eveArtifact?.specHash?.slice(0, 8) || "unknown"})`
         )
       }
 
@@ -986,19 +990,19 @@ export async function POST(request: Request) {
       if (!devAgent) {
         return Response.json({ success: false, error: "Dev Agent not found." }, { status: 404, headers: corsHeaders })
       }
-      const preparedAshArtifact = await ensureDevAgentAshArtifactPrepared(devAgent)
-      ashArtifactState = preparedAshArtifact.state
+      const preparedEveArtifact = await ensureDevAgentEveArtifactPrepared(devAgent)
+      eveArtifactState = preparedEveArtifact.state
       devAgent = {
         ...devAgent,
-        ashArtifact: preparedAshArtifact.artifact
+        eveArtifact: preparedEveArtifact.artifact
       }
-      const ashStatusLabel =
-        preparedAshArtifact.state === "reused" || preparedAshArtifact.state === "existing"
-          ? "Reusing ASH app"
-          : "Storing ASH app"
+      const eveStatusLabel =
+        preparedEveArtifact.state === "reused" || preparedEveArtifact.state === "existing"
+          ? "Reusing EVE app"
+          : "Storing EVE app"
       workflowType = devAgent.legacyWorkflowType || "prompt"
       workflowLog(
-        `[Start Fix] ${ashStatusLabel}: ${preparedAshArtifact.artifact.sourceLabel} (${preparedAshArtifact.artifact.specHash.slice(0, 8)})`
+        `[Start Fix] ${eveStatusLabel}: ${preparedEveArtifact.artifact.sourceLabel} (${preparedEveArtifact.artifact.specHash.slice(0, 8)})`
       )
     } else if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
       workflowType = body.workflowType
@@ -1113,18 +1117,18 @@ export async function POST(request: Request) {
     console.log(`[Start Fix] Generated runId: ${runId}`)
     console.log(`[Start Fix] userId: ${userId}, projectName: ${projectName}`)
 
-    const ashActionLabel =
-      ashArtifactState === "stored"
-        ? "Storing ASH app"
-        : ashArtifactState === "existing"
-          ? "Using existing ASH app"
-          : "Reusing ASH app"
-    const initialAshStep =
-      devAgent?.ashArtifact?.sourceLabel && devAgent?.ashArtifact?.specHash ? `${ashActionLabel}...` : undefined
+    const eveActionLabel =
+      eveArtifactState === "stored"
+        ? "Storing EVE app"
+        : eveArtifactState === "existing"
+          ? "Using existing EVE app"
+          : "Reusing EVE app"
+    const initialEveStep =
+      devAgent?.eveArtifact?.sourceLabel && devAgent?.eveArtifact?.specHash ? `${eveActionLabel}...` : undefined
     const initialProgressLogs = [
-      ...(devAgent?.ashArtifact?.sourceLabel && devAgent?.ashArtifact?.specHash
+      ...(devAgent?.eveArtifact?.sourceLabel && devAgent?.eveArtifact?.specHash
         ? [
-            `[ASH] ${ashActionLabel}: ${devAgent.ashArtifact.sourceLabel} (${devAgent.ashArtifact.specHash.slice(0, 8)})`
+            `[EVE] ${eveActionLabel}: ${devAgent.eveArtifact.sourceLabel} (${devAgent.eveArtifact.specHash.slice(0, 8)})`
           ]
         : []),
       "[Sandbox] Queued sandbox creation..."
@@ -1132,27 +1136,27 @@ export async function POST(request: Request) {
 
     const currentUserForTelemetry =
       runnerKind === "skill-runner" ? await getCurrentUserFromRequest(request).catch(() => null) : null
-    const compiledAshSpec = devAgent?.ashArtifact?.compiledSpec
-    const effectiveDevAgentExecutionMode = compiledAshSpec?.executionMode ?? devAgent?.executionMode
-    const effectiveDevAgentSandboxBrowser = compiledAshSpec?.sandboxBrowser ?? devAgent?.sandboxBrowser
-    const effectiveDevAgentAiAgent = compiledAshSpec?.aiAgent ?? devAgent?.aiAgent
-    const effectiveDevAgentDevServerCommand = compiledAshSpec?.devServerCommand || devAgent?.devServerCommand
-    const effectiveDevAgentActionSteps = compiledAshSpec?.actionSteps ?? devAgent?.actionSteps
-    const effectiveDevAgentSkillRefs = compiledAshSpec?.skillRefs ?? devAgent?.skillRefs
-    const effectiveDevAgentSuccessEval = compiledAshSpec?.successEval || devAgent?.successEval
-    const effectiveDevAgentEarlyExitMode = compiledAshSpec?.earlyExitMode ?? devAgent?.earlyExitMode
-    const effectiveDevAgentEarlyExitEval = compiledAshSpec?.earlyExitEval || devAgent?.earlyExitEval
-    const effectiveDevAgentEarlyExitRule = compiledAshSpec?.earlyExitRule
+    const compiledEveSpec = devAgent?.eveArtifact?.compiledSpec
+    const effectiveDevAgentExecutionMode = compiledEveSpec?.executionMode ?? devAgent?.executionMode
+    const effectiveDevAgentSandboxBrowser = compiledEveSpec?.sandboxBrowser ?? devAgent?.sandboxBrowser
+    const effectiveDevAgentAiAgent = compiledEveSpec?.aiAgent ?? devAgent?.aiAgent
+    const effectiveDevAgentDevServerCommand = compiledEveSpec?.devServerCommand || devAgent?.devServerCommand
+    const effectiveDevAgentActionSteps = compiledEveSpec?.actionSteps ?? devAgent?.actionSteps
+    const effectiveDevAgentSkillRefs = compiledEveSpec?.skillRefs ?? devAgent?.skillRefs
+    const effectiveDevAgentSuccessEval = compiledEveSpec?.successEval || devAgent?.successEval
+    const effectiveDevAgentEarlyExitMode = compiledEveSpec?.earlyExitMode ?? devAgent?.earlyExitMode
+    const effectiveDevAgentEarlyExitEval = compiledEveSpec?.earlyExitEval || devAgent?.earlyExitEval
+    const effectiveDevAgentEarlyExitRule = compiledEveSpec?.earlyExitRule
       ? {
-          metricType: compiledAshSpec.earlyExitRule.metricType,
-          metricKey: compiledAshSpec.earlyExitRule.metricKey,
-          label: compiledAshSpec.earlyExitRule.label || undefined,
-          valueType: compiledAshSpec.earlyExitRule.valueType,
-          operator: compiledAshSpec.earlyExitRule.operator,
-          valueNumber: compiledAshSpec.earlyExitRule.valueNumber ?? undefined,
-          secondaryValueNumber: compiledAshSpec.earlyExitRule.secondaryValueNumber ?? undefined,
-          valueBoolean: compiledAshSpec.earlyExitRule.valueBoolean ?? undefined,
-          valueString: compiledAshSpec.earlyExitRule.valueString || undefined
+          metricType: compiledEveSpec.earlyExitRule.metricType,
+          metricKey: compiledEveSpec.earlyExitRule.metricKey,
+          label: compiledEveSpec.earlyExitRule.label || undefined,
+          valueType: compiledEveSpec.earlyExitRule.valueType,
+          operator: compiledEveSpec.earlyExitRule.operator,
+          valueNumber: compiledEveSpec.earlyExitRule.valueNumber ?? undefined,
+          secondaryValueNumber: compiledEveSpec.earlyExitRule.secondaryValueNumber ?? undefined,
+          valueBoolean: compiledEveSpec.earlyExitRule.valueBoolean ?? undefined,
+          valueString: compiledEveSpec.earlyExitRule.valueString || undefined
         }
       : devAgent?.earlyExitRule
 
@@ -1192,16 +1196,16 @@ export async function POST(request: Request) {
       timestamp: runTimestamp, // For progress updates
       workflowType, // For progress updates
       initialStepNumber: devAgent ? 0 : 1,
-      initialCurrentStep: initialAshStep || "Creating sandbox environment...",
+      initialCurrentStep: initialEveStep || "Creating sandbox environment...",
       initialProgressLogs,
       devAgentId: devAgent?.id,
       devAgentName: devAgent?.name,
       devAgentDescription: devAgent?.description,
-      devAgentInstructions: devAgent?.ashArtifact?.systemPrompt || devAgent?.instructions,
-      devAgentCompiledSpec: compiledAshSpec,
-      devAgentAshTarballUrl: devAgent?.ashArtifact?.tarballUrl,
-      devAgentRevision: devAgent?.ashArtifact?.revision,
-      devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+      devAgentInstructions: devAgent?.eveArtifact?.systemPrompt || devAgent?.instructions,
+      devAgentCompiledSpec: compiledEveSpec,
+      devAgentEveTarballUrl: devAgent?.eveArtifact?.tarballUrl,
+      devAgentRevision: devAgent?.eveArtifact?.revision,
+      devAgentSpecHash: devAgent?.eveArtifact?.specHash,
       runnerKind,
       skillRunnerCanonicalPath,
       skillRunnerValidationWarning,
@@ -1279,13 +1283,13 @@ export async function POST(request: Request) {
             devAgentId: devAgent?.id,
             devAgentName: devAgent?.name,
             devAgentDescription: devAgent?.description,
-            devAgentRevision: devAgent?.ashArtifact?.revision,
-            devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+            devAgentRevision: devAgent?.eveArtifact?.revision,
+            devAgentSpecHash: devAgent?.eveArtifact?.specHash,
             devAgentExecutionMode: devAgent?.executionMode,
             devAgentSandboxBrowser: devAgent?.sandboxBrowser,
             skillRunnerCanonicalPath,
             skillRunnerValidationWarning,
-            currentStep: initialAshStep || "Creating sandbox environment...",
+            currentStep: initialEveStep || "Creating sandbox environment...",
             stepNumber: devAgent ? 0 : 1,
             progressLogs: initialProgressLogs,
             customPrompt: workflowType === "prompt" ? customPrompt : undefined
@@ -1404,8 +1408,8 @@ export async function POST(request: Request) {
                   devAgentId: devAgent?.id,
                   devAgentName: devAgent?.name,
                   devAgentDescription: devAgent?.description,
-                  devAgentRevision: devAgent?.ashArtifact?.revision,
-                  devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+                  devAgentRevision: devAgent?.eveArtifact?.revision,
+                  devAgentSpecHash: devAgent?.eveArtifact?.specHash,
                   devAgentExecutionMode: devAgent?.executionMode,
                   devAgentSandboxBrowser: devAgent?.sandboxBrowser,
                   skillRunnerCanonicalPath,
@@ -1434,8 +1438,8 @@ export async function POST(request: Request) {
                 devAgentId: devAgent?.id,
                 devAgentName: devAgent?.name,
                 devAgentDescription: devAgent?.description,
-                devAgentRevision: devAgent?.ashArtifact?.revision,
-                devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+                devAgentRevision: devAgent?.eveArtifact?.revision,
+                devAgentSpecHash: devAgent?.eveArtifact?.specHash,
                 devAgentExecutionMode: devAgent?.executionMode,
                 devAgentSandboxBrowser: devAgent?.sandboxBrowser,
                 skillRunnerCanonicalPath,
@@ -1494,8 +1498,8 @@ export async function POST(request: Request) {
               devAgentId: devAgent?.id,
               devAgentName: devAgent?.name,
               devAgentDescription: devAgent?.description,
-              devAgentRevision: devAgent?.ashArtifact?.revision,
-              devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+              devAgentRevision: devAgent?.eveArtifact?.revision,
+              devAgentSpecHash: devAgent?.eveArtifact?.specHash,
               devAgentExecutionMode: devAgent?.executionMode,
               devAgentSandboxBrowser: devAgent?.sandboxBrowser,
               skillRunnerCanonicalPath,
@@ -1546,8 +1550,8 @@ export async function POST(request: Request) {
           devAgentId: devAgent?.id,
           devAgentName: devAgent?.name,
           devAgentDescription: devAgent?.description,
-          devAgentRevision: devAgent?.ashArtifact?.revision,
-          devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+          devAgentRevision: devAgent?.eveArtifact?.revision,
+          devAgentSpecHash: devAgent?.eveArtifact?.specHash,
           devAgentExecutionMode: devAgent?.executionMode,
           devAgentSandboxBrowser: devAgent?.sandboxBrowser,
           skillRunnerCanonicalPath,
