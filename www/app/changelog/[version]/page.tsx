@@ -165,7 +165,7 @@ export default async function VersionPage({ params }: { params: Promise<{ versio
         {/* Footer Actions */}
         <div className="mt-8 pt-6 border-t flex items-center justify-between">
           <Link
-            href={`https://github.com/elsigh/dev3000/releases/tag/v${release.version}`}
+            href={`https://github.com/vercel-labs/dev3000/releases/tag/v${release.version}`}
             target="_blank"
             rel="noopener noreferrer"
           >
