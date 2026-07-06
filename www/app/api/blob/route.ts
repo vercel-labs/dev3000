@@ -9,6 +9,13 @@ export async function GET(request: Request) {
     return new Response("Missing pathname", { status: 400 })
   }
 
+  // The proxy only ever addresses stored blobs by pathname. Reject absolute
+  // URLs so this route can't be used as an authenticated SSRF primitive
+  // (readBlobResponse would otherwise fetch an arbitrary http(s) target).
+  if (/^https?:\/\//i.test(pathname)) {
+    return new Response("Invalid pathname", { status: 400 })
+  }
+
   if (!isPublicBlobPathname(pathname)) {
     const user = await getCurrentUser()
     if (!user) {

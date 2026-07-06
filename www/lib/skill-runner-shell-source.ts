@@ -1,55 +1,14 @@
 import { createHash } from "node:crypto"
 import { SKILL_RUNNER_WORKER_REPO, SKILL_RUNNER_WORKER_ROOT_DIRECTORY } from "@/lib/skill-runner-config"
+import {
+  encodeRunnerShellPathForUrl,
+  isRunnerShellFile,
+  resolveRunnerShellDeploymentPath
+} from "@/lib/skill-runner-shell-files"
 
-const RUNNER_SHELL_ROOT_FILES = new Set(["package.json", "bun.lock"])
-const RUNNER_SHELL_EXACT_FILES = new Set([
-  "www/app/api/cloud/fix-workflow/health/route.ts",
-  "www/app/api/cloud/fix-workflow/steps.ts",
-  "www/app/api/cloud/fix-workflow/workflow.ts",
-  "www/app/api/blob/route.ts",
-  "www/app/api/cloud/start-fix/route.ts",
-  "www/app/api/skill-runner-worker/version/route.ts",
-  "www/app/skill-runner-worker-home.tsx",
-  "www/app/skill-runner-worker-layout.tsx",
-  "www/bunfig.toml",
-  "www/lib/ai-gateway.ts",
-  "www/lib/auth.ts",
-  "www/lib/blob-store.ts",
-  "www/lib/constants.ts",
-  "www/lib/deepsec-partial-report.ts",
-  "www/lib/dev-agent-eve-spec.ts",
-  "www/lib/dev-agent-eve.ts",
-  "www/lib/dev-agents.ts",
-  "www/lib/dev-server-command.ts",
-  "www/lib/file-to-route.ts",
-  "www/lib/oidc-token-binding.ts",
-  "www/lib/report-redaction.ts",
-  "www/lib/skill-runner-config.ts",
-  "www/lib/skill-runner-runtime.ts",
-  "www/lib/skill-runner-shell-source.ts",
-  "www/lib/skill-runner-worker.ts",
-  "www/lib/skill-runners.ts",
-  "www/lib/skills-sh.ts",
-  "www/lib/team-selection.ts",
-  "www/lib/telemetry-storage.ts",
-  "www/lib/telemetry.ts",
-  "www/lib/vercel-cli-sandbox-context.ts",
-  "www/lib/vercel-protection-bypass.ts",
-  "www/lib/vercel-teams.ts",
-  "www/lib/workflow-api.ts",
-  "www/lib/workflow-logger.ts",
-  "www/lib/workflow-report-blob.ts",
-  "www/lib/workflow-report-summary.ts",
-  "www/lib/workflow-storage.ts",
-  "www/next.config.ts",
-  "www/package.json",
-  "www/scripts/patch-workflow-vercel-config.mjs",
-  "www/tsconfig.json",
-  "www/types.ts",
-  "www/vercel.json"
-])
-const RUNNER_SHELL_INCLUDED_PREFIXES = ["www/app/.well-known/workflow/v1/", "www/lib/cloud/", "www/lib/skills/"]
 const RUNNER_SHELL_UPLOAD_CONCURRENCY = 8
+const RUNNER_SHELL_FETCH_TIMEOUT_MS = 30_000
+const RUNNER_SHELL_FETCH_ATTEMPTS = 3
 const RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH =
   '// Self-hosted runner shells disable Preview Comments to avoid Vercel adapter/Next ctx.projectDir skew.\nprocess.env.VERCEL_PREVIEW_COMMENTS_ENABLED = "0"\n'
 const RUNNER_NEXT_CONFIG_CONTENT = `import type { NextConfig } from "next"
@@ -73,16 +32,6 @@ export default withWorkflow(nextConfig)
 const RUNNER_NEXT_CONFIG_PATH = `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/next.config.ts`
 const RUNNER_ROOT_PACKAGE_PATH = "package.json"
 const RUNNER_WWW_PACKAGE_PATH = `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/package.json`
-const RUNNER_SHELL_PATH_OVERRIDES = new Map([
-  [
-    `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/app/skill-runner-worker-home.tsx`,
-    `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/app/page.tsx`
-  ],
-  [
-    `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/app/skill-runner-worker-layout.tsx`,
-    `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/app/layout.tsx`
-  ]
-])
 
 export interface SkillRunnerShellTreeEntry {
   path?: string
@@ -112,31 +61,60 @@ export interface VercelUploadedDeploymentFile {
   size: number
 }
 
-export function isRunnerShellFile(file: string): boolean {
-  if (RUNNER_SHELL_ROOT_FILES.has(file)) return true
-  if (RUNNER_SHELL_EXACT_FILES.has(file)) return true
-  return RUNNER_SHELL_INCLUDED_PREFIXES.some((prefix) => file.startsWith(prefix))
+export { isRunnerShellFile } from "@/lib/skill-runner-shell-files"
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500
 }
 
-function encodePathForUrl(file: string): string {
-  return file
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/")
+// Network calls in the install path previously had no timeout and no retry, so
+// one hung or transiently failing GitHub/Vercel request stalled or failed the
+// whole worker install. Retry transient failures with a short backoff and
+// bound every attempt with a timeout.
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= RUNNER_SHELL_FETCH_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(RUNNER_SHELL_FETCH_TIMEOUT_MS)
+      })
+      if (isRetryableStatus(response.status) && attempt < RUNNER_SHELL_FETCH_ATTEMPTS) {
+        lastError = new Error(`HTTP ${response.status}`)
+        await response.body?.cancel().catch(() => undefined)
+      } else {
+        return response
+      }
+    } catch (error) {
+      lastError = error
+      if (attempt >= RUNNER_SHELL_FETCH_ATTEMPTS) break
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * attempt))
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
-function resolveRunnerShellDeploymentPath(file: string): string {
-  return RUNNER_SHELL_PATH_OVERRIDES.get(file) || file
+function buildGitHubHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "dev3000-skill-runner"
+  }
+  // Unauthenticated GitHub API requests are limited to 60/hour per IP; use a
+  // token when one is available so installs don't fail under rate limiting.
+  const githubToken = process.env.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim()
+  if (githubToken) {
+    headers.Authorization = `Bearer ${githubToken}`
+  }
+  return headers
 }
 
 async function fetchGitHubTree(commit: string): Promise<GitHubTreeResponse> {
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `https://api.github.com/repos/${SKILL_RUNNER_WORKER_REPO}/git/trees/${commit}?recursive=1`,
     {
-      headers: {
-        Accept: "application/vnd.github+json",
-        "User-Agent": "dev3000-skill-runner"
-      },
+      headers: buildGitHubHeaders(),
       cache: "no-store"
     }
   )
@@ -162,7 +140,7 @@ export function resolveSkillRunnerShellSourceFromTree(
     .map((entry) => ({
       path: resolveRunnerShellDeploymentPath(entry.path),
       sourcePath: entry.path,
-      contentUrl: `https://raw.githubusercontent.com/${SKILL_RUNNER_WORKER_REPO}/${commit}/${encodePathForUrl(entry.path)}`
+      contentUrl: `https://raw.githubusercontent.com/${SKILL_RUNNER_WORKER_REPO}/${commit}/${encodeRunnerShellPathForUrl(entry.path)}`
     }))
     .sort((a, b) => a.path.localeCompare(b.path))
 
@@ -208,7 +186,7 @@ async function mapWithConcurrency<T, U>(
 }
 
 async function fetchSourceFile(file: SkillRunnerShellManifestFile): Promise<Uint8Array> {
-  const response = await fetch(file.contentUrl, {
+  const response = await fetchWithRetry(file.contentUrl, {
     cache: "no-store"
   })
 
@@ -424,7 +402,7 @@ async function uploadDeploymentFile({
   const body = new ArrayBuffer(size)
   new Uint8Array(body).set(bytes)
 
-  const response = await fetch(apiUrl.toString(), {
+  const response = await fetchWithRetry(apiUrl.toString(), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,

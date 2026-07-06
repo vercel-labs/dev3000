@@ -7345,7 +7345,7 @@ async function installPackagedEveAppInSandbox(
           buildEnsureNode24AvailableScript(),
           buildEnsureBunAvailableScript(),
           'TMP_DIR="$(mktemp -d)"',
-          `curl -fsSL ${shellEscape(tarballUrl)} -o "$TMP_DIR/eve.tgz"`,
+          `curl -fsSL --retry 3 --retry-delay 1 --retry-all-errors ${shellEscape(tarballUrl)} -o "$TMP_DIR/eve.tgz"`,
           'ROOT_DIR="$(tar -tzf "$TMP_DIR/eve.tgz" | head -1 | cut -d/ -f1)"',
           `mkdir -p ${shellEscape(EVE_RUNTIME_ROOT)}`,
           'rm -rf "$TMP_DIR/unpack" "$APP_ROOT.tmp"',
@@ -7358,7 +7358,15 @@ async function installPackagedEveAppInSandbox(
           "export WORKFLOW_TARGET_WORLD=local",
           "export DEV3000_EVE_RUNTIME_PASSWORD=build-only",
           'cd "$APP_ROOT"',
-          '"$BUN_BIN" install --silent --minimum-release-age=0',
+          [
+            "INSTALL_STATUS=1",
+            "for INSTALL_ATTEMPT in 1 2 3; do",
+            '  if "$BUN_BIN" install --silent --minimum-release-age=0; then INSTALL_STATUS=0; break; fi',
+            '  echo "bun install failed on attempt $INSTALL_ATTEMPT; retrying" >&2',
+            "  sleep 2",
+            "done",
+            'if [ "$INSTALL_STATUS" -ne 0 ]; then exit "$INSTALL_STATUS"; fi'
+          ].join("\n"),
           '"$NODE24_BIN" scripts/patch-workflow-world-local.mjs',
           [
             "BUILD_STATUS=1",
@@ -7389,21 +7397,40 @@ async function installPackagedEveAppInSandbox(
   return { appRoot }
 }
 
+async function isEveRuntimeProcessAlive(sandbox: Sandbox, pidPath: string): Promise<boolean> {
+  try {
+    const result = await runSandboxCommandWithOptions(sandbox, {
+      cmd: "sh",
+      args: ["-lc", `[ -f ${shellEscape(pidPath)} ] && kill -0 "$(cat ${shellEscape(pidPath)})" 2>/dev/null`]
+    })
+    return result.exitCode === 0
+  } catch {
+    // Treat liveness-check failures as inconclusive so a flaky sandbox
+    // command can't abort a runtime that is still booting.
+    return true
+  }
+}
+
 async function waitForEveRuntimeReady(
   sandbox: Sandbox,
   port: number,
   authorization: string,
   progressContext?: ProgressContext | null,
-  logPath?: string
+  logPath?: string,
+  pidPath?: string
 ): Promise<string> {
   const deadline = Date.now() + 120000
   let lastRouteError: string | null = null
+  let failedPolls = 0
+  let runtimeProcessDied = false
 
   while (Date.now() < deadline) {
     try {
       const baseUrl = sandbox.domain(port)
       const response = await fetch(`${baseUrl}${EVE_DEV3000_HEALTH_ROUTE_PATH}`, {
-        headers: { authorization, "cache-control": "no-store" }
+        headers: { authorization, "cache-control": "no-store" },
+        // A single hung health request must not eat the whole readiness budget.
+        signal: AbortSignal.timeout(5000)
       })
       if (response.ok) {
         const bodyText = await response.text()
@@ -7424,6 +7451,17 @@ async function waitForEveRuntimeReady(
     } catch (error) {
       lastRouteError = error instanceof Error ? error.message : String(error)
     }
+
+    failedPolls += 1
+    // If the eve process already exited, waiting out the full deadline just
+    // delays the failure by up to two minutes. Check liveness periodically and
+    // bail out early with the log preview instead.
+    if (pidPath && failedPolls % 5 === 0 && !(await isEveRuntimeProcessAlive(sandbox, pidPath))) {
+      runtimeProcessDied = true
+      lastRouteError = `runtime process exited before becoming ready${lastRouteError ? `; last poll error: ${lastRouteError}` : ""}`
+      break
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 2000))
   }
 
@@ -7444,7 +7482,7 @@ async function waitForEveRuntimeReady(
   }
 
   throw new Error(
-    `Timed out waiting for packaged EVE runtime on port ${port}${lastRouteError ? ` (${lastRouteError})` : ""}${runtimeLogPreview ? ` log=${runtimeLogPreview}` : ""}`
+    `${runtimeProcessDied ? "Packaged EVE runtime crashed during startup" : `Timed out waiting for packaged EVE runtime on port ${port}`}${lastRouteError ? ` (${lastRouteError})` : ""}${runtimeLogPreview ? ` log=${runtimeLogPreview}` : ""}`
   )
 }
 
@@ -7463,6 +7501,7 @@ async function ensurePackagedEveRuntimeInSandbox(
   const runtimePassword = buildEveRuntimePassword(runtimeRunKey, specHash)
   const authorization = buildEveRuntimeAuthorizationHeader(runtimePassword)
   const logPath = `${EVE_RUNTIME_LOG_DIR}/eve-runtime.log`
+  const pidPath = `${EVE_RUNTIME_LOG_DIR}/eve-runtime.pid`
   const workflowDataDir = `${EVE_RUNTIME_ROOT}/workflow-data/${runtimeRunKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`
 
   await appendProgressLog(progressContext, "[Agent] Starting analysis runner...")
@@ -7492,6 +7531,9 @@ async function ensurePackagedEveRuntimeInSandbox(
         `export NITRO_PORT=${EVE_RUNTIME_PORT}`,
         "export NITRO_HOST=0.0.0.0",
         `: > ${logPath}`,
+        // exec below keeps this shell's PID, so the pidfile tracks the actual
+        // eve runtime process for the readiness crash check.
+        `printf '%s' "$$" > ${shellEscape(pidPath)}`,
         `printf 'launching packaged EVE runtime\\n' >> ${logPath}`,
         `cd ${shellEscape(appRoot)}`,
         `if [ -f scripts/patch-workflow-world-local.mjs ]; then "$NODE_RUNTIME" scripts/patch-workflow-world-local.mjs >> ${logPath} 2>&1 || { echo "EVE workflow schema patch failed" >> ${logPath}; exit 1; }; fi`,
@@ -7509,7 +7551,14 @@ async function ensurePackagedEveRuntimeInSandbox(
     }
   })
 
-  const baseUrl = await waitForEveRuntimeReady(sandbox, EVE_RUNTIME_PORT, authorization, progressContext, logPath)
+  const baseUrl = await waitForEveRuntimeReady(
+    sandbox,
+    EVE_RUNTIME_PORT,
+    authorization,
+    progressContext,
+    logPath,
+    pidPath
+  )
   return { authorization, baseUrl, logPath, workflowDataDir }
 }
 

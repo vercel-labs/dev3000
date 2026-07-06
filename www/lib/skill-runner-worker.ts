@@ -753,7 +753,9 @@ function buildDeploymentLogsUrl(deploymentUrl: string | undefined): string | und
 async function fetchWorkerVersionPayload(workerBaseUrl: string): Promise<SkillRunnerWorkerVersionPayload | null> {
   try {
     const response = await fetch(new URL("/api/skill-runner-worker/version", workerBaseUrl).toString(), {
-      cache: "no-store"
+      cache: "no-store",
+      // A hung worker must not stall project lookup; treat slow as unknown.
+      signal: AbortSignal.timeout(10_000)
     })
     if (!response.ok) {
       return null
@@ -1397,13 +1399,27 @@ async function resolveSkillRunnerWorkerProjectFromLookupProject(
   const projectName = project.name
   const latestDeployment = resolveLatestDeployment(project)
   const desiredWorkerBranch = resolveWorkerGitBranch()
-  const desiredWorkerGitSha = await resolveDesiredWorkerGitSha(desiredWorkerBranch)
-  const latestDeploymentDetails =
-    latestDeployment?.id && latestDeployment.readyState === "READY"
-      ? await getDeploymentDetails(accessToken, team, latestDeployment.id)
-      : latestDeployment?.id
-        ? await getDeploymentDetails(accessToken, team, latestDeployment.id)
-        : null
+  const latestDeploymentUrl = normalizeHost(latestDeployment?.url)
+  const workerBaseUrl = resolveWorkerBaseUrl(project)
+  // These lookups are independent network calls; running them serially added
+  // several round trips to every worker validate/install request.
+  const [desiredWorkerGitSha, latestDeploymentDetails, workerVersion, missingEnvKeys] = await Promise.all([
+    resolveDesiredWorkerGitSha(desiredWorkerBranch),
+    latestDeployment?.id ? getDeploymentDetails(accessToken, team, latestDeployment.id) : Promise.resolve(null),
+    workerBaseUrl && (latestDeployment?.readyState === "READY" || latestDeployment?.state === "READY")
+      ? fetchWorkerVersionPayload(workerBaseUrl)
+      : Promise.resolve(null),
+    getWorkerProjectMissingEnvKeys(
+      accessToken,
+      team,
+      project.id,
+      latestDeployment?.id,
+      latestDeployment?.createdAt
+    ).catch((error: unknown) => {
+      if (isVercelProjectNotFoundError(error)) return null
+      throw error
+    })
+  ])
   const latestDeploymentGitSha = normalizeGitSha(
     latestDeploymentDetails?.meta?.d3kSkillRunnerShellCommit ||
       latestDeploymentDetails?.meta?.d3kSkillRunnerShellVersion ||
@@ -1412,22 +1428,6 @@ async function resolveSkillRunnerWorkerProjectFromLookupProject(
   )
   const latestDeploymentGitBranch =
     latestDeploymentDetails?.meta?.githubCommitRef?.trim() || latestDeploymentDetails?.meta?.gitCommitRef?.trim()
-  const latestDeploymentUrl = normalizeHost(latestDeployment?.url)
-  const workerBaseUrl = resolveWorkerBaseUrl(project)
-  const workerVersion =
-    workerBaseUrl && (latestDeployment?.readyState === "READY" || latestDeployment?.state === "READY")
-      ? await fetchWorkerVersionPayload(workerBaseUrl)
-      : null
-  const missingEnvKeys = await getWorkerProjectMissingEnvKeys(
-    accessToken,
-    team,
-    project.id,
-    latestDeployment?.id,
-    latestDeployment?.createdAt
-  ).catch((error: unknown) => {
-    if (isVercelProjectNotFoundError(error)) return null
-    throw error
-  })
   if (!missingEnvKeys) {
     return null
   }

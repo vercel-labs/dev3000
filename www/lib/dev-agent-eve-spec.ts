@@ -13,10 +13,10 @@ import type {
 } from "@/lib/dev-agents"
 
 const EVE_PACKAGE_NAME = "eve"
-const EVE_PACKAGE_VERSION = "0.17.0"
+const EVE_PACKAGE_VERSION = "0.20.0"
 const EVE_AI_PACKAGE_VERSION = "^7.0.0"
 const EVE_RUNTIME_VERSION = `${EVE_PACKAGE_NAME}@${EVE_PACKAGE_VERSION}`
-const EVE_ARTIFACT_FORMAT_VERSION = 17
+const EVE_ARTIFACT_FORMAT_VERSION = 18
 
 export interface DevAgentEveArtifact {
   framework: "eve"
@@ -808,7 +808,10 @@ function hostFilesystemBackend(): SandboxBackend {
             sessionKey: input.sessionKey,
           };
         },
-        async dispose() {},
+        // eve >=0.20 calls shutdown() on server exit. This backend runs on the
+        // host filesystem inside the outer workflow sandbox, so there is no
+        // separate compute to stop; the workspace state stays reattachable.
+        async shutdown() {},
       };
     },
   };

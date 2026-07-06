@@ -1,3 +1,4 @@
+import { getCurrentUserFromRequest } from "@/lib/auth"
 import { deleteWorkflowRuns, listWorkflowRuns } from "@/lib/workflow-storage"
 
 // CORS headers - allowing credentials from localhost
@@ -30,6 +31,14 @@ export async function GET(request: Request) {
 
     if (!userId) {
       return Response.json({ error: "userId is required" }, { status: 400, headers: corsHeaders })
+    }
+
+    const user = await getCurrentUserFromRequest(request)
+    if (!user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401, headers: corsHeaders })
+    }
+    if (user.id !== userId) {
+      return Response.json({ error: "Forbidden" }, { status: 403, headers: corsHeaders })
     }
 
     const runs = await listWorkflowRuns(userId)
@@ -72,6 +81,14 @@ export async function DELETE(request: Request) {
 
     if (!runIds || !Array.isArray(runIds) || runIds.length === 0) {
       return Response.json({ error: "runIds array is required" }, { status: 400, headers: corsHeaders })
+    }
+
+    const user = await getCurrentUserFromRequest(request)
+    if (!user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401, headers: corsHeaders })
+    }
+    if (user.id !== userId) {
+      return Response.json({ error: "Forbidden" }, { status: 403, headers: corsHeaders })
     }
 
     console.log(`[Workflows API] Deleting ${runIds.length} runs for user: ${userId}`)

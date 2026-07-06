@@ -501,7 +501,11 @@ async function forwardSelfHostedStartRequest({
     method: "POST",
     headers,
     body: JSON.stringify(forwardedBody),
-    cache: "no-store"
+    cache: "no-store",
+    // A hung self-hosted worker previously left the forwarded run stuck in
+    // "running" until the platform killed the after() task. Fail fast so the
+    // failure blob is written and the run surfaces a concrete error.
+    signal: AbortSignal.timeout(60_000)
   })
 
   const text = await upstream.text()
