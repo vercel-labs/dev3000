@@ -1,0 +1,57 @@
+www/app/api/projects/check-protection/route.ts
+  s_6971530277e645::t_fad3bffe45da34 1-18,27-38,40,43-44
+www/app/api/blob/route.ts
+  s_6971530277e645::t_3f171f32d4aa28 12-18
+www/lib/dev-agent-eve-spec.test.ts
+  s_6971530277e645::t_681a29c35001d7 28
+  s_6971530277e645::t_b13312fd701f34 39-41
+www/lib/skill-runner-shell-files.ts
+  s_6971530277e645::t_bfc215d9a4e50c 1-57,59-86
+  s_6971530277e645::t_5f0d37a02e29a2 58
+scripts/build-skill-runner-shell-artifact.ts
+  s_6971530277e645::t_35fc51912c8923 83
+  s_6971530277e645::t_ff0162a3709789 6-10
+www/lib/skill-runner-worker.ts
+  s_6971530277e645::t_324e5b550ec38d 756-758
+  s_6971530277e645::t_c82375037528ed 1402-1422
+www/app/api/cloud/start-fix/route.ts
+  s_6971530277e645::t_4291aa15f61bd5 504-508
+www/lib/dev-agent-eve-spec.ts
+  s_6971530277e645::t_f984577965d10c 16,19
+  s_6971530277e645::t_7f2e41e85ec8bf 811-814
+www/app/api/cloud/fix-workflow/steps.ts
+  s_6971530277e645::t_418449e862aaac 7485
+  s_6971530277e645::t_ee38708cd5132e 7554-7561
+  s_6971530277e645::t_20dc2e389867ce 7348
+  s_6971530277e645::t_1b6a1dcdaf5a4f 7504
+  s_6971530277e645::t_d88736c8585bdd 7534-7536
+  s_6971530277e645::t_88a29109f0c639 7361-7369
+  s_6971530277e645::t_9357a385cfda46 7400-7413,7419-7420,7424-7425,7431-7433
+  s_6971530277e645::t_f607757a2a0e9d 7454-7464
+www/lib/skill-runner-shell-source.ts
+  s_6971530277e645::t_36cc9ea5dba918 3-7,10-11
+  s_6971530277e645::t_fca0621026f399 189
+  s_6971530277e645::t_cee29caa2ec441 405
+  s_6971530277e645::t_989ad3fe98b802 64-67,70-96,99-110,114,117
+  s_6971530277e645::t_bc5ae7d3b2f95e 143
+www/app/api/dev-agents/runs/route.ts
+  s_6971530277e645::t_dd8b96333187cf 1
+  s_6971530277e645::t_3cd86eb826516d 86-93
+  s_6971530277e645::t_5591fe720ae15b 36-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "74075d13e9da5405c9dfa4cd55c357b51cf1b48b",
+  "prompts": {},
+  "sessions": {
+    "s_6971530277e645": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "93f2675b-54fb-4189-bff9-7a39db63dea5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
