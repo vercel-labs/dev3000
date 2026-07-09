@@ -1,0 +1,70 @@
+www/package.json
+  s_e24c181cd95e43::t_8735cba93bc006 95
+  s_e24c181cd95e43::t_f1d512727502c0 11,96
+example-apps/cls-fix/package.json
+  s_e24c181cd95e43::t_8735cba93bc006 25
+  s_e24c181cd95e43::t_f1d512727502c0 9-10,26
+example-apps/eliminate-waterfalls/package.json
+  s_e24c181cd95e43::t_f1d512727502c0 9-10,26
+  s_e24c181cd95e43::t_8735cba93bc006 25
+package.json
+  s_e24c181cd95e43::t_8735cba93bc006 67
+  s_e24c181cd95e43::t_f1d512727502c0 18,20,68
+example-apps/bundle-size-optimizer/package.json
+  s_e24c181cd95e43::t_f1d512727502c0 9-10,26
+  s_e24c181cd95e43::t_8735cba93bc006 25
+example-apps/client-side-fetch-optimizer/package.json
+  s_e24c181cd95e43::t_f1d512727502c0 9-10,26
+  s_e24c181cd95e43::t_8735cba93bc006 25
+example-apps/re-render-optimizer/package.json
+  s_e24c181cd95e43::t_f1d512727502c0 9-10,26
+  s_e24c181cd95e43::t_8735cba93bc006 25
+example-apps/server-side-perf-optimizer/package.json
+  s_e24c181cd95e43::t_f1d512727502c0 9-10,26
+  s_e24c181cd95e43::t_8735cba93bc006 25
+example-apps/design-guidelines/package.json
+  s_e24c181cd95e43::t_8735cba93bc006 25
+  s_e24c181cd95e43::t_f1d512727502c0 9-10,26
+example-apps/react-performance/package.json
+  s_e24c181cd95e43::t_8735cba93bc006 25
+  s_e24c181cd95e43::t_f1d512727502c0 9-10,26
+example-apps/turbopack-bundle-analyzer/package.json
+  s_e24c181cd95e43::t_f1d512727502c0 9-10,26
+  s_e24c181cd95e43::t_8735cba93bc006 25
+bun.lock
+  s_e24c181cd95e43::t_feb2a17bd904c1 26,29,120,125,889-930,2037
+example-apps/bundle-size-optimizer/bun.lock
+  s_e24c181cd95e43::t_ef8ab4b960a907 17,21,254-295,858
+example-apps/client-side-fetch-optimizer/bun.lock
+  s_e24c181cd95e43::t_dc8f59740a2260 17,21,254-295,858
+example-apps/cls-fix/bun.lock
+  s_e24c181cd95e43::t_d3a734de12a431 17,21,254-295,856
+example-apps/design-guidelines/bun.lock
+  s_e24c181cd95e43::t_166be7740f93f3 17,21,254-295,856
+example-apps/eliminate-waterfalls/bun.lock
+  s_e24c181cd95e43::t_014f49f508b121 17,21,254-295,858
+example-apps/re-render-optimizer/bun.lock
+  s_e24c181cd95e43::t_836d76be3abe87 17,21,254-295,858
+example-apps/react-performance/bun.lock
+  s_e24c181cd95e43::t_628a03477d01fb 17,21,254-295,856
+example-apps/server-side-perf-optimizer/bun.lock
+  s_e24c181cd95e43::t_6105b2e7447573 17,21,254-295,858
+example-apps/turbopack-bundle-analyzer/bun.lock
+  s_e24c181cd95e43::t_85d9998dcc252a 17,21,254-295,856
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2bbffc8a2af9389f6487fd53c45539af22fc2027",
+  "prompts": {},
+  "sessions": {
+    "s_e24c181cd95e43": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f443b-50ca-7603-9c49-5ddd344c2ad0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
