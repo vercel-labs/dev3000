@@ -83,11 +83,6 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Configure Git
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -224,7 +219,51 @@ jobs:
           NODE
 
       - name: Commit and push next canary
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json packages/d3k-windows-x64/package.json bun.lock
-          git commit -m "Bump to v$NEXT_CANARY_VERSION for local development"
-          git push origin HEAD:main
+          export EXPECTED_HEAD_OID="$(git rev-parse HEAD)"
+
+          node <<'NODE'
+            const fs = require("fs");
+            const paths = [
+              "package.json",
+              "packages/d3k-darwin-arm64/package.json",
+              "packages/d3k-linux-x64/package.json",
+              "packages/d3k-windows-x64/package.json",
+              "bun.lock"
+            ];
+            const additions = paths.map((path) => ({
+              path,
+              contents: fs.readFileSync(path).toString("base64")
+            }));
+
+            const payload = {
+              query: `
+                mutation($input: CreateCommitOnBranchInput!) {
+                  createCommitOnBranch(input: $input) {
+                    commit { oid url }
+                  }
+                }
+              `,
+              variables: {
+                input: {
+                  branch: {
+                    repositoryNameWithOwner: process.env.GITHUB_REPOSITORY,
+                    branchName: "main"
+                  },
+                  message: {
+                    headline: `Bump to v${process.env.NEXT_CANARY_VERSION} for local development`
+                  },
+                  expectedHeadOid: process.env.EXPECTED_HEAD_OID,
+                  fileChanges: { additions }
+                }
+              }
+            };
+
+            fs.writeFileSync("/tmp/create-canary-commit.json", JSON.stringify(payload));
+          NODE
+
+          # GitHub signs commits created by this mutation, satisfying the
+          # verified-signature rule on main without storing a signing key.
+          gh api graphql --input /tmp/create-canary-commit.json

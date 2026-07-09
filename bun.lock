@@ -30,9 +30,9 @@
         "vitest": "4.1.0",
       },
       "optionalDependencies": {
-        "@d3k/darwin-arm64": "0.0.178-canary",
-        "@d3k/linux-x64": "0.0.178-canary",
-        "@d3k/windows-x64": "0.0.178-canary",
+        "@d3k/darwin-arm64": "0.0.179-canary",
+        "@d3k/linux-x64": "0.0.179-canary",
+        "@d3k/windows-x64": "0.0.179-canary",
         "@opentui/core-linux-x64": "0.1.86",
       },
     },
