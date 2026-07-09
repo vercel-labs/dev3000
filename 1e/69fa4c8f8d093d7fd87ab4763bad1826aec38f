@@ -1,0 +1,37 @@
+CHANGELOG.md
+  s_e24c181cd95e43::t_1ed53ab44ff016 7-16,24
+www/lib/changelog.ts
+  s_e24c181cd95e43::t_074cb1c4335f2d 12-24
+package.json
+  s_b46c444a094be7::t_e19b8d59ff5a84 3,72-74
+packages/d3k-darwin-arm64/package.json
+  s_b46c444a094be7::t_df653fe95745dc 3
+packages/d3k-linux-x64/package.json
+  s_b46c444a094be7::t_a943371ed82c2e 3
+packages/d3k-windows-x64/package.json
+  s_b46c444a094be7::t_9cf90dd0776cef 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1e69fa4c8f8d093d7fd87ab4763bad1826aec38f",
+  "prompts": {},
+  "sessions": {
+    "s_b46c444a094be7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_b46c444a094be7",
+        "model": "unknown"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    },
+    "s_e24c181cd95e43": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f443b-50ca-7603-9c49-5ddd344c2ad0",
+        "model": "unknown"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
