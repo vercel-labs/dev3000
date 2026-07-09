@@ -1,0 +1,29 @@
+package.json
+  s_e24c181cd95e43::t_1dfa5046c76e5a 3,72-74
+packages/d3k-windows-x64/package.json
+  s_e24c181cd95e43::t_1dfa5046c76e5a 3
+.github/workflows/release.yml
+  s_e24c181cd95e43::t_78d6eec5ead68c 222-223,225-269
+packages/d3k-darwin-arm64/package.json
+  s_e24c181cd95e43::t_1dfa5046c76e5a 3
+packages/d3k-linux-x64/package.json
+  s_e24c181cd95e43::t_1dfa5046c76e5a 3
+bun.lock
+  s_e24c181cd95e43::t_420148db386b71 33-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c6419471b240bd0bc0c827ec61229cb70f35b389",
+  "prompts": {},
+  "sessions": {
+    "s_e24c181cd95e43": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f443b-50ca-7603-9c49-5ddd344c2ad0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
