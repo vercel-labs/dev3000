@@ -19,7 +19,7 @@ import { dirname, join, resolve, sep } from "path"
 import { fileURLToPath } from "url"
 import { stripVTControlCharacters } from "util"
 import { CDPMonitor } from "./cdp-monitor.js"
-import { ensurePortlessAlias, getPortlessUrl, isPortlessInstalled, removePortlessAlias } from "./portless.js"
+import { buildPortlessServerCommand, type PortlessRuntime, preparePortlessRuntime } from "./portless.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { getBundledD3kSkillPath, listAvailableSkills } from "./skills/index.js"
@@ -174,7 +174,8 @@ interface DevEnvironmentOptions {
   userSetPort?: boolean // Whether user explicitly set the port
   tail?: boolean // Whether to tail the log file to terminal
   tui?: boolean // Whether to use TUI mode (default true)
-  portless?: boolean // Enable portless .localhost URLs when explicitly requested
+  portless?: boolean // Use Portless stable URLs by default; false opts out
+  customServerCommand?: boolean // Preserve explicit --command strings through a shell
   dateTimeFormat?: "local" | "utc" // Timestamp format option
   pluginReactScan?: boolean // Whether to enable react-scan performance monitoring
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
@@ -239,6 +240,15 @@ function parsePortNumber(port: string): number | null {
     return null
   }
   return parsed
+}
+
+export function detectServerPortFromOutput(text: string): string | null {
+  return (
+    text.match(/Running:\s+PORT=(\d+)/i)?.[1] ||
+    text.match(/using available port (\d+) instead/i)?.[1] ||
+    text.match(/Local:.*localhost:(\d+)/i)?.[1] ||
+    null
+  )
 }
 
 function escapeRegexForPkill(value: string): string {
@@ -782,7 +792,9 @@ export function writeSessionInfo(
   skillsInstalled?: string[],
   skillsAgentId?: string | null,
   preferredBrowserTool?: "agent-browser",
-  agentName?: string | null
+  agentName?: string | null,
+  portless?: boolean,
+  ready?: boolean
 ): void {
   const projectDir = getProjectDir()
 
@@ -812,7 +824,9 @@ export function writeSessionInfo(
       skillsInstalled: skillsInstalled || [],
       skillsAgentId: skillsAgentId || null,
       preferredBrowserTool: preferredBrowserTool || "agent-browser",
-      agentName: agentName || persistedAgentName || null
+      agentName: agentName || persistedAgentName || null,
+      portless: portless === true,
+      ready: ready === true
     }
 
     // Write session file in project directory
@@ -944,7 +958,9 @@ export class DevEnvironment {
   private portDetected: boolean = false
   private serverUsesHttps: boolean = false
   private publicAppUrl: string | null = null
-  private portlessAliasName: string | null = null
+  private portlessRuntime: PortlessRuntime | null = null
+  private portlessFallbackReason: string | null = null
+  private runtimeReady: boolean = false
 
   /** Returns "https" or "http" based on detected server protocol */
   private get serverProtocol(): "http" | "https" {
@@ -1028,9 +1044,14 @@ export class DevEnvironment {
       isEnabled: !options.tui && !options.tail // Disable spinner in TUI mode
     })
 
-    if (options.portless === true && isPortlessInstalled()) {
-      this.portlessAliasName = projectName
-      this.publicAppUrl = getPortlessUrl(projectName)
+    if (options.portless !== false) {
+      const portless = preparePortlessRuntime(getProjectDisplayName())
+      if (portless.success && portless.runtime) {
+        this.portlessRuntime = portless.runtime
+        this.publicAppUrl = portless.runtime.url
+      } else {
+        this.portlessFallbackReason = portless.error || "Portless initialization failed"
+      }
     }
 
     // Ensure screenshot directory exists
@@ -1057,7 +1078,7 @@ export class DevEnvironment {
     const userSetAppPort = this.options.userSetPort || false
 
     // If user didn't set ports, find available ones first (before checking)
-    if (!userSetAppPort) {
+    if (!userSetAppPort && !this.portlessRuntime) {
       const startPort = parseInt(this.options.port, 10)
       const availablePort = await findAvailablePort(startPort)
       if (availablePort !== this.options.port) {
@@ -1217,6 +1238,13 @@ export class DevEnvironment {
     // Check if TUI mode is enabled (default) and stdin supports it
     const canUseTUI = this.options.tui && process.stdin.isTTY
 
+    if (this.portlessFallbackReason) {
+      this.debugLog(`Portless unavailable; using direct localhost: ${this.portlessFallbackReason}`)
+      if (!canUseTUI) {
+        console.warn(chalk.yellow("Portless unavailable; using direct localhost."))
+      }
+    }
+
     if (!canUseTUI && this.options.tui) {
       this.debugLog("TTY not available, falling back to non-TUI mode")
     }
@@ -1360,7 +1388,6 @@ export class DevEnvironment {
 
       // Update TUI with confirmed port (may have changed during server startup)
       this.tui.updateAppPort(this.options.port)
-      this.syncPortlessAlias()
       this.tui.updateAppUrl(this.options.appUrl || this.publicAppUrl)
 
       // Legacy tools server removed - using CLI commands instead
@@ -1377,6 +1404,7 @@ export class DevEnvironment {
       }
 
       // Write session info for tooling discovery (include CDP URL if browser monitoring was started)
+      this.runtimeReady = true
       this.writeCurrentSessionInfo(projectName)
 
       // Clear status - ready!
@@ -1436,7 +1464,6 @@ export class DevEnvironment {
 
       // Legacy server removed - using CLI commands instead
       // await this.waitForMcpServer()
-      this.syncPortlessAlias()
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode
       if (!this.options.serversOnly && serverStarted) {
@@ -1450,6 +1477,7 @@ export class DevEnvironment {
 
       // Get project name for session info and Visual Timeline URL
       const projectName = getProjectName()
+      this.runtimeReady = true
       this.writeCurrentSessionInfo(projectName)
 
       // Complete startup with success message only in non-TUI mode
@@ -1495,7 +1523,14 @@ export class DevEnvironment {
   }
 
   private async startServer() {
-    this.debugLog(`Starting server process: ${this.options.serverCommand}`)
+    const launchCommand = this.portlessRuntime
+      ? buildPortlessServerCommand(this.portlessRuntime, this.options.serverCommand, {
+          appPort: this.options.userSetPort ? this.options.port : undefined,
+          customCommand: this.options.customServerCommand
+        })
+      : this.options.serverCommand
+
+    this.debugLog(`Starting server process: ${launchCommand}`)
 
     this.serverStartTime = Date.now()
     const serverEnv = { ...process.env }
@@ -1506,7 +1541,7 @@ export class DevEnvironment {
     }
 
     // Use the full command string with shell: true to properly handle complex commands
-    this.serverProcess = spawn(this.options.serverCommand, {
+    this.serverProcess = spawn(launchCommand, {
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
       detached: true, // Run independently
@@ -1770,29 +1805,6 @@ export class DevEnvironment {
     }
   }
 
-  private syncPortlessAlias() {
-    if (!this.portlessAliasName) {
-      return
-    }
-
-    const result = ensurePortlessAlias(this.portlessAliasName, this.options.port)
-    if (result.success) {
-      this.publicAppUrl = result.url
-      this.debugLog(`Portless alias ready: ${this.portlessAliasName} -> ${this.options.port} (${result.url})`)
-    } else {
-      this.publicAppUrl = null
-      this.debugLog(`Portless alias setup failed: ${result.error}`)
-    }
-  }
-
-  private clearPortlessAlias() {
-    if (!this.portlessAliasName) {
-      return
-    }
-
-    removePortlessAlias(this.portlessAliasName)
-  }
-
   private writeCurrentSessionInfo(projectName: string = getProjectName()) {
     const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
     const chromePids = this.cdpMonitor?.getChromePids() || []
@@ -1811,17 +1823,16 @@ export class DevEnvironment {
       skillsInstalled,
       this.options.skillsAgentId ?? null,
       this.options.browserTool,
-      this.options.agentName ?? null
+      this.options.agentName ?? null,
+      Boolean(this.portlessRuntime),
+      this.runtimeReady
     )
   }
 
   private detectPortChange(text: string) {
     // Detect Next.js port switch: "⚠ Port 3000 is in use by process 39543, using available port 3001 instead."
     // Also detect: "Local: http://localhost:3001"
-    const nextJsPortSwitchMatch = text.match(/using available port (\d+) instead/i)
-    const localUrlMatch = text.match(/Local:.*localhost:(\d+)/i)
-
-    const detectedPort = nextJsPortSwitchMatch?.[1] || localUrlMatch?.[1]
+    const detectedPort = detectServerPortFromOutput(text)
 
     if (detectedPort && detectedPort !== this.options.port) {
       const oldPort = this.options.port
@@ -1829,7 +1840,6 @@ export class DevEnvironment {
       this.logger.log("server", `[PORT] Server switched from port ${oldPort} to ${detectedPort}`)
       this.options.port = detectedPort
       this.portDetected = true
-      this.syncPortlessAlias()
 
       // Update session info with new port
       const projectName = getProjectName()
@@ -2263,8 +2273,6 @@ export class DevEnvironment {
       // Non-fatal - ignore cleanup errors
     }
 
-    this.clearPortlessAlias()
-
     // Check PID file ownership BEFORE deleting (needed for cleanup decisions)
     let weOwnPidFile = false
     try {
@@ -2279,8 +2287,6 @@ export class DevEnvironment {
     } catch (_error) {
       // Non-fatal - ignore cleanup errors
     }
-
-    this.clearPortlessAlias()
 
     // Stop TUI if it's running
     if (this.tui) {

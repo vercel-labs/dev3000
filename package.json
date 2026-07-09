@@ -1,7 +1,7 @@
 {
   "name": "dev3000",
   "version": "0.0.178-canary",
-  "description": "AI-powered development tools with browser monitoring and skill integration",
+  "description": "Agent-first local web debugging runtime with unified server and browser context",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -53,7 +53,7 @@
     "ink-spinner": "^5.0.0",
     "ora": "9.3.0",
     "package-manager-detector": "^1.3.0",
-    "portless": "0.5.2",
+    "portless": "0.15.1",
     "react": "19.2.4",
     "ws": "^8.18.3"
   },
@@ -75,7 +75,7 @@
     "@opentui/core-linux-x64": "0.1.86"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0"
   },
   "repository": {
     "type": "git",

@@ -13,6 +13,11 @@ export interface Session {
   appPort?: string
   publicUrl?: string | null
   cdpUrl?: string | null
+  cwd?: string
+  serverCommand?: string | null
+  serverPid?: number | null
+  portless?: boolean
+  ready?: boolean
 }
 
 function readActiveSession(sessionFile: string): Session | null {
@@ -81,5 +86,5 @@ export function findCurrentSession(): Session | null {
   }
 
   const currentProject = getProjectName()
-  return sessions.find((session) => session.projectName === currentProject) || sessions[0]
+  return sessions.find((session) => session.projectName === currentProject) || null
 }

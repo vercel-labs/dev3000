@@ -5,6 +5,8 @@ This file is the source of truth for agent guidance in this repo. `CLAUDE.md` is
 ## Runtime
 
 - Use `d3k` as the default local runtime.
+- Portless stable URLs are enabled by default. Use the `appUrl` from `d3k status --json`; do not assume a localhost port.
+- When the user asks to use, test, debug, or develop with d3k, start it in a retained background tool session. Do not make the user launch it or switch to the TUI.
 - Do not run `bun run dev` or `bun run build` for `www/`.
 - Start d3k with:
   ```bash
@@ -12,6 +14,7 @@ This file is the source of truth for agent guidance in this repo. `CLAUDE.md` is
   ```
 - Primary debugging commands:
   ```bash
+  d3k status --json
   d3k errors --context
   d3k logs -n 200
   d3k logs --type browser

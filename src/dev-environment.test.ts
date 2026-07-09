@@ -29,6 +29,7 @@ import {
   countActiveD3kInstances,
   createPersistentLogFile,
   DevEnvironment,
+  detectServerPortFromOutput,
   findAvailablePort,
   getSessionChromePids,
   gracefulKillProcess,
@@ -41,6 +42,17 @@ import {
   writeSessionInfo
 } from "./dev-environment"
 import { getProjectDir } from "./utils/project-name"
+
+describe("detectServerPortFromOutput", () => {
+  it("detects the Portless-assigned child port", () => {
+    expect(detectServerPortFromOutput("Running: PORT=4312 HOST=127.0.0.1 bun run dev")).toBe("4312")
+  })
+
+  it("keeps existing framework port detection", () => {
+    expect(detectServerPortFromOutput("using available port 3001 instead")).toBe("3001")
+    expect(detectServerPortFromOutput("Local: http://localhost:5173")).toBe("5173")
+  })
+})
 
 describe("gracefulKillProcess", () => {
   // This test suite ensures that process termination follows the correct sequence:
@@ -842,7 +854,8 @@ describe("DevEnvironment log initialization", () => {
         logFile,
         commandName: "d3k",
         tui: false,
-        serversOnly: true
+        serversOnly: true,
+        portless: false
       })
 
       expect(readFileSync(logFile, "utf-8")).toBe("existing log\n")

@@ -13,15 +13,15 @@
 
 ### Short description
 
-`Bootstraps d3k runtime for standalone AI apps`
+`Agent-owned local web debugging with a managed browser`
 
 ### Long description
 
-`Installs/initializes dev3000 (d3k) for standalone agent shells (Codex, Cursor, Claude Code), starts d3k as the default runtime, and uses unified logs plus CDP browser control instead of raw npm/bun dev.`
+`Starts or reuses d3k in a retained background agent session, opens the project-stable managed browser, and uses unified browser/server evidence instead of raw dev servers or separate automation browsers.`
 
 ### Default prompt
 
-`Use $d3k to initialize d3k, start the correct runtime, and drive debugging with unified logs and CDP browser controls.`
+`Use $d3k to let me test this project in its monitored browser, then inspect the captured evidence after I reproduce the issue.`
 
 ## Source URL
 

@@ -1,161 +1,128 @@
 ---
 name: "d3k"
-description: "d3k assistant for debugging web apps"
+description: "Use when the user asks to use d3k, run/dev/test/debug a web project with d3k, or reproduce a browser issue. Own the runtime: reuse or background-start d3k non-interactively, wait for readiness, use its project-stable managed Chrome profile, and inspect unified browser/server evidence."
 ---
 
-# d3k Commands
+# d3k Agent Runtime
 
-d3k captures browser and server logs in a unified log file. Use these commands:
+d3k is the local web runtime for this task. It starts the dev server behind a stable Portless URL, owns a project-stable Chrome profile, and records server logs, browser console output, network activity, interactions, and screenshots in one timeline.
 
-## Viewing Errors and Logs
+When this skill triggers, operate d3k. Do not merely tell the user how to run it.
+
+## Interpret the Request
+
+- "Let me test/dev my project with d3k": prepare the runtime and headed browser, confirm it is ready, then hand control to the user. Wait for them to reproduce the issue before inspecting evidence.
+- "Test/debug/fix this with d3k": prepare the runtime, then drive the managed browser and investigate autonomously.
+- If ambiguous, start the runtime and browser first. That action is safe and useful for either path.
+
+## Start or Reuse d3k
+
+Run from the project root.
+
+1. Check for an existing project runtime:
 
 ```bash
-d3k errors              # Show recent errors (browser + server combined)
-d3k errors --context    # Show errors + user actions that preceded them
-d3k errors -n 20        # Show last 20 errors
-
-d3k logs                # Show recent logs (browser + server combined)
-d3k logs --type browser # Browser logs only
-d3k logs --type server  # Server logs only
+d3k status --json
 ```
 
-## Other Commands
+If it reports `"running": true`, reuse it. Do not start a second dev server or browser.
+
+2. If d3k is not installed, install it:
 
 ```bash
-d3k fix                 # Deep analysis of application errors
-d3k fix --focus build   # Focus on build errors
-
-d3k crawl               # Discover app URLs
-d3k crawl --depth all   # Exhaustive crawl
+bun install -g dev3000
 ```
 
-## Auth-Sensitive Browser Rule
+Use `npm install -g dev3000` only when Bun is unavailable.
 
-For Google OAuth, Supabase auth, and any other auth-sensitive debugging, d3k must own browser startup. Start d3k normally so it launches the app and browser together, including `--app-url` when the target URL is known.
+3. Start d3k with the agent's shell/process tool as a retained background or yielded session:
 
-Do not use `d3k agent-browser --profile ... --headed open ...`, raw Chrome, Playwright, browser MCP sessions, manual CDP attachment, or any other separate automation browser for auth debugging unless the user explicitly asks for that path. Agent-browser-created/custom Chrome profiles can be rejected by Google with `This browser or app may not be secure`.
-
-After d3k has launched the browser, use the safe managed-browser path:
 ```bash
-d3k agent-browser --require-d3k-browser open "<url>"
+d3k --no-agent --no-tui -t
+```
+
+Do not wait for this long-running command to exit. Keep its process/session handle so you can monitor or stop it later. Prefer the execution tool's background/session support over shelling with `&`.
+
+If the target URL is already known, pass it so the managed browser opens there:
+
+```bash
+d3k --no-agent --no-tui -t --app-url "<url>"
+```
+
+Let d3k auto-detect the package manager, dev command, and port. Add `--command`, `--script`, or `--port` only when detection is wrong or the user specified them.
+
+4. Poll until the runtime is ready:
+
+```bash
+d3k status --json
+```
+
+A successful status response is the readiness boundary. Prefer the reported Portless `appUrl`; the underlying app port may change between runs. If startup fails, inspect the retained process output and `d3k logs --type server`; do not launch a separate dev server.
+
+## User-Driven Testing
+
+When the user says "let me test":
+
+1. Confirm the status response includes the app URL and `"browserConnected": true`.
+2. Tell the user the monitored browser is ready.
+3. Keep the d3k process running and wait for the user to reproduce the behavior.
+4. When they report that it happened, begin with:
+
+```bash
+d3k errors --context
+d3k logs -n 200
+```
+
+Do not replace the headed browser with automation while the user is testing.
+
+## Agent-Driven Testing
+
+Drive the exact browser d3k is monitoring:
+
+```bash
 d3k agent-browser snapshot -i
-d3k agent-browser click @e1
+d3k agent-browser click @e2
+d3k agent-browser fill @e3 "text"
 d3k errors --context
 ```
 
-If this fails because no d3k-managed browser exists, restart d3k cleanly with its normal browser-owning flow. Do not fall back to creating a new agent-browser Chrome for auth.
-
-## Browser Interaction
-
-`d3k agent-browser` auto-connects to the active d3k-managed browser session:
+Use `--require-d3k-browser` when opening a URL so failure cannot silently create another browser:
 
 ```bash
-d3k agent-browser --require-d3k-browser open http://localhost:3000/page
-d3k agent-browser snapshot -i    # Get element refs (@e1, @e2)
-d3k agent-browser click @e2
-d3k agent-browser fill @e3 "text"
-d3k agent-browser screenshot /tmp/shot.png
+d3k agent-browser --require-d3k-browser open "<url>"
 ```
 
-`--require-d3k-browser` fails instead of creating a new browser when no d3k-managed browser exists. To target a different browser, run `d3k agent-browser connect <port>` first only when explicitly requested.
+After every reproduction or code change, replay the relevant interaction and check `d3k errors --context` again.
 
-## Non-Auth Fresh Browser/Profile Startup
+## Evidence Commands
 
-Use this workflow only for non-auth debugging when the user asks Codex to start d3k with a fresh browser/profile. Do not use it for Google OAuth, Supabase auth, or any sign-in flow that may reject automation browsers.
-
-1. Close any stale `agent-browser` daemon before launching with `--profile`. Otherwise `agent-browser` will reuse the existing daemon and print `--profile ignored`.
-   ```bash
-   d3k agent-browser close --all
-   ```
-
-2. Start the app through d3k in `servers-only` mode and keep that command running. In Codex, this is more reliable than asking d3k to launch the browser itself when a fresh profile is required.
-   ```bash
-   d3k --no-agent --no-skills --servers-only --command "npm run dev -- -H 127.0.0.1 -p 3000" --port 3000 --startup-timeout 90 --no-tui
-   ```
-
-   Adjust the package-manager command and port for the project. Prefer `--command` over `--script` when passing framework flags. For npm scripts, put flags after `--`; otherwise tools like Next.js can interpret the port as a project directory.
-
-3. Verify the server before opening more browser windows:
-   ```bash
-   curl -I http://127.0.0.1:3000
-   ```
-
-4. Open the fresh profile as a separate browser step:
-   ```bash
-   d3k agent-browser --allow-new-browser --profile /tmp/d3k-fresh-profile --headed open http://127.0.0.1:3000
-   ```
-
-5. Sanity-check the opened page:
-   ```bash
-   d3k agent-browser get title
-   d3k agent-browser snapshot -i
-   d3k errors
-   ```
-
-Practical rules:
-
-- Prefer `127.0.0.1` for this workflow. If `localhost` hangs or flips between IPv4/IPv6 behavior, do not keep retrying browser launches.
-- If `curl -I` hangs, the server is wedged even if the port appears occupied; restart the d3k server process before opening a browser.
-- In `servers-only` mode there is no d3k-managed browser. Use `--allow-new-browser` only for the explicit non-auth fresh-profile open step; do not use `d3k cdp-port`.
-- In sandboxed agent environments, rerun local-network checks and `agent-browser` opens outside the sandbox when sandbox networking blocks access to `127.0.0.1`.
-
-## Browser Tool Choice
-
-Use `agent-browser` for browser work.
-
-Practical rule:
-
-- Need to drive the same monitored browser session: use `agent-browser`.
-- Examples:
+Prefer these over ad-hoc log scraping:
 
 ```bash
-d3k agent-browser snapshot -i
-d3k agent-browser click @e2
+d3k status --json
+d3k errors --context
+d3k logs -n 200
+d3k logs --type browser
+d3k logs --type server
 ```
 
-To make d3k prefer one locally when it launches helper browser commands, use:
+Artifacts live under `~/.d3k/<project>/`, including `session.json`, logs, screenshots, and the Chrome profile.
 
-```bash
-d3k --browser-tool agent-browser
-```
+## Browser and Auth Safety
 
-## Fix Workflow
+d3k must own browser startup by default. Its per-project Chrome profile preserves login state, cookies, and local storage.
 
-1. `d3k errors --context` - See errors and what triggered them
-2. Fix the code
-3. `d3k agent-browser --require-d3k-browser open <url>` then `d3k agent-browser click @e1` to replay
-4. `d3k errors` - Verify fix worked
+For Google OAuth, Supabase auth, and other auth-sensitive flows, never substitute raw Chrome, Playwright, a browser MCP session, manual CDP attachment, or `agent-browser --profile`. Those paths use a different browser/profile and can trigger "This browser or app may not be secure."
 
-## Creating PRs with Before/After Screenshots
+If the managed browser is unavailable, stop or interrupt the retained d3k process and restart d3k cleanly. Do not work around it by creating another browser.
 
-When creating a PR for visual changes, **always capture before/after screenshots** to show the impact:
+Use `--headless` only for CI or when explicitly requested. Use `--servers-only` only when browser monitoring is intentionally unwanted.
 
-1. **Before making changes**, screenshot the production site:
-   ```bash
-   d3k agent-browser --require-d3k-browser open https://production-url.com/affected-page
-   d3k agent-browser screenshot /tmp/before.png
-   ```
+## Operating Rules
 
-2. **After making changes**, screenshot localhost:
-   ```bash
-   d3k agent-browser --require-d3k-browser open http://localhost:3000/affected-page
-   d3k agent-browser screenshot /tmp/after.png
-   ```
-
-3. **Or use the tooling API** to capture multiple routes at once:
-   ```
-   capture_before_after_screenshots(
-     productionUrl: "https://myapp.vercel.app",
-     routes: ["/", "/about", "/contact"]
-   )
-   ```
-
-4. **Include in PR description** using markdown:
-   ```markdown
-   ### Visual Comparison
-   | Route | Before | After |
-   |-------|--------|-------|
-   | `/` | ![Before](before.png) | ![After](after.png) |
-   ```
-
-   Upload screenshots by dragging them into the GitHub PR description.
+- Do not run `npm run dev`, `bun run dev`, or another dev server alongside d3k.
+- Do not start a second d3k when `d3k status --json` reports an active one.
+- Keep d3k alive across edits and retests.
+- Preserve the project-stable Chrome profile unless the user explicitly asks for a fresh profile.
+- Leave the runtime running when handing a headed browser to the user; stop it only when asked or when the task requires a clean restart.
+- Portless routing is the default. Use `--no-portless` or `PORTLESS=0` only when direct localhost routing is explicitly required.

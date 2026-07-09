@@ -6,7 +6,7 @@
  * pre-compiled binary from the platform-specific optional dependency.
  */
 
-import { spawnSync } from "child_process"
+import { spawn } from "child_process"
 import { existsSync } from "fs"
 import { createRequire } from "module"
 import { arch, platform } from "os"
@@ -82,14 +82,39 @@ function findBinary() {
 function main() {
   const binPath = findBinary()
 
-  // Execute the binary with all arguments passed through
-  const result = spawnSync(binPath, process.argv.slice(2), {
+  // Keep the JavaScript launcher alive so it can forward terminal signals to
+  // the compiled runtime. This matters when the runtime owns detached child
+  // process groups such as Portless-managed dev servers.
+  const child = spawn(binPath, process.argv.slice(2), {
     stdio: "inherit",
     shell: false,
   })
 
-  // Exit with the same code as the binary
-  process.exit(result.status || 0)
+  const forwardSignal = (signal) => {
+    if (!child.killed) {
+      child.kill(signal)
+    }
+  }
+
+  process.on("SIGINT", () => forwardSignal("SIGINT"))
+  process.on("SIGTERM", () => forwardSignal("SIGTERM"))
+  if (process.platform !== "win32") {
+    process.on("SIGHUP", () => forwardSignal("SIGHUP"))
+  }
+
+  child.on("error", (error) => {
+    console.error(`Failed to start d3k: ${error.message}`)
+    process.exit(1)
+  })
+
+  child.on("exit", (code, signal) => {
+    if (code !== null) {
+      process.exit(code)
+    }
+
+    const signalExitCodes = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 }
+    process.exit(signalExitCodes[signal] || 1)
+  })
 }
 
 main()

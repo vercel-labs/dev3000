@@ -1,77 +1,21 @@
 import { spawnSync } from "child_process"
-import { accessSync, chmodSync, constants, existsSync, readFileSync } from "fs"
+import { accessSync, chmodSync, constants, existsSync } from "fs"
 import { homedir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 
-const DEFAULT_PROXY_PORT = 1355
-const SYSTEM_STATE_DIR = "/tmp/portless"
-const USER_STATE_DIR = join(homedir(), ".portless")
-const TLS_MARKER_FILE = "proxy.tls"
-const PORT_FILE = "proxy.port"
+const SAFE_PROXY_PORT = 1355
 
-export interface PortlessState {
-  dir: string
-  port: number
-  tls: boolean
+export interface PortlessRuntime {
+  name: string
+  url: string
+  command: string
 }
 
-function getDefaultPortlessPort(): number {
-  const envPort = Number.parseInt(process.env.PORTLESS_PORT || "", 10)
-  if (!Number.isNaN(envPort) && envPort >= 1 && envPort <= 65535) {
-    return envPort
-  }
-  return DEFAULT_PROXY_PORT
-}
-
-function resolveStateDir(port: number): string {
-  if (process.env.PORTLESS_STATE_DIR) {
-    return process.env.PORTLESS_STATE_DIR
-  }
-  return port < 1024 ? SYSTEM_STATE_DIR : USER_STATE_DIR
-}
-
-function readPortFromDir(dir: string): number | null {
-  try {
-    const port = Number.parseInt(readFileSync(join(dir, PORT_FILE), "utf8").trim(), 10)
-    return Number.isNaN(port) ? null : port
-  } catch {
-    return null
-  }
-}
-
-function readTlsMarker(dir: string): boolean {
-  return existsSync(join(dir, TLS_MARKER_FILE))
-}
-
-export function discoverPortlessState(): PortlessState {
-  const defaultPort = getDefaultPortlessPort()
-  const defaultDir = resolveStateDir(defaultPort)
-  const defaultTls = process.env.PORTLESS_HTTPS === "1" || process.env.PORTLESS_HTTPS === "true"
-
-  if (process.env.PORTLESS_STATE_DIR) {
-    return {
-      dir: defaultDir,
-      port: readPortFromDir(defaultDir) ?? defaultPort,
-      tls: readTlsMarker(defaultDir) || defaultTls
-    }
-  }
-
-  const userPort = readPortFromDir(USER_STATE_DIR)
-  if (userPort !== null) {
-    return { dir: USER_STATE_DIR, port: userPort, tls: readTlsMarker(USER_STATE_DIR) }
-  }
-
-  const systemPort = readPortFromDir(SYSTEM_STATE_DIR)
-  if (systemPort !== null) {
-    return { dir: SYSTEM_STATE_DIR, port: systemPort, tls: readTlsMarker(SYSTEM_STATE_DIR) }
-  }
-
-  return { dir: defaultDir, port: defaultPort, tls: defaultTls }
-}
-
-export function getPortlessUrl(hostname: string, state: PortlessState = discoverPortlessState()): string {
-  return `${state.tls ? "https" : "http"}://${hostname}.localhost:${state.port}`
+export interface PortlessRuntimeResult {
+  success: boolean
+  runtime?: PortlessRuntime
+  error?: string
 }
 
 function getRunnablePath(searchPath: string): string | null {
@@ -95,7 +39,7 @@ function getRunnablePath(searchPath: string): string | null {
   }
 }
 
-function getPortlessCommand(): string {
+export function getPortlessCommand(): string {
   if (process.env.PORTLESS_PATH) {
     const runnablePath = getRunnablePath(process.env.PORTLESS_PATH)
     if (runnablePath) {
@@ -151,10 +95,6 @@ function getPortlessCommand(): string {
 }
 
 export function isPortlessInstalled(): boolean {
-  if (process.platform === "win32") {
-    return false
-  }
-
   try {
     const result = spawnSync(getPortlessCommand(), ["--version"], {
       stdio: "ignore",
@@ -166,11 +106,14 @@ export function isPortlessInstalled(): boolean {
   }
 }
 
-function runPortlessCommand(args: string[]): { success: boolean; output: string } {
+function runPortlessCommand(args: string[], timeout: number = 30000): { success: boolean; output: string } {
   try {
     const result = spawnSync(getPortlessCommand(), args, {
       encoding: "utf8",
-      timeout: 30000
+      timeout,
+      // A pipe is intentionally non-interactive. Portless must never block an
+      // agent-owned d3k startup waiting for sudo or certificate prompts.
+      stdio: ["pipe", "pipe", "pipe"]
     })
 
     const output = `${result.stdout || ""}${result.stderr || ""}`.trim()
@@ -186,41 +129,86 @@ function runPortlessCommand(args: string[]): { success: boolean; output: string 
   }
 }
 
-export function ensurePortlessAlias(
-  hostname: string,
-  appPort: string | number
-): {
-  success: boolean
-  url: string
-  error?: string
-} {
-  const initialState = discoverPortlessState()
-  const fallbackUrl = getPortlessUrl(hostname, initialState)
+export function parsePortlessUrl(output: string): string | null {
+  return output.match(/https?:\/\/[^\s]+/)?.[0] || null
+}
 
-  const proxyResult = runPortlessCommand(["proxy", "start"])
-  if (!proxyResult.success) {
-    return {
-      success: false,
-      url: fallbackUrl,
-      error: proxyResult.output || "Failed to start portless proxy"
+function getPortlessUrl(name: string): string | null {
+  const result = runPortlessCommand(["get", name], 5000)
+  return result.success ? parsePortlessUrl(result.output) : null
+}
+
+function isProxyRunning(): boolean {
+  const result = runPortlessCommand(["doctor"], 10000)
+  return /ok\s+Proxy is running\b/i.test(result.output)
+}
+
+export function preparePortlessRuntime(name: string): PortlessRuntimeResult {
+  if (process.env.PORTLESS === "0") {
+    return { success: false, error: "Disabled by PORTLESS=0" }
+  }
+
+  if (!isPortlessInstalled()) {
+    return { success: false, error: "Portless is not installed" }
+  }
+
+  if (!isProxyRunning()) {
+    // Never try the privileged HTTPS default from an agent-owned process.
+    // sudo may read directly from /dev/tty even when the child stdio is piped,
+    // which would hang startup on a password prompt. Existing running proxies
+    // retain their configured HTTPS/TLD behavior; fresh starts use safe HTTP.
+    const startResult = runPortlessCommand(["proxy", "start", "--port", String(SAFE_PROXY_PORT), "--no-tls"])
+
+    if (!startResult.success) {
+      return {
+        success: false,
+        error: startResult.output || "Failed to start the Portless proxy"
+      }
     }
   }
 
-  const aliasResult = runPortlessCommand(["alias", hostname, String(appPort), "--force"])
-  if (!aliasResult.success) {
-    return {
-      success: false,
-      url: fallbackUrl,
-      error: aliasResult.output || "Failed to register portless alias"
-    }
+  const url = getPortlessUrl(name)
+  if (!url) {
+    return { success: false, error: "Portless did not return a URL" }
   }
 
   return {
     success: true,
-    url: getPortlessUrl(hostname)
+    runtime: {
+      name,
+      url,
+      command: getPortlessCommand()
+    }
   }
 }
 
-export function removePortlessAlias(hostname: string): void {
-  runPortlessCommand(["alias", "--remove", hostname])
+function shellQuote(value: string): string {
+  if (process.platform === "win32") {
+    return `"${value.replace(/"/g, '\\"')}"`
+  }
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+export function buildPortlessServerCommand(
+  runtime: PortlessRuntime,
+  serverCommand: string,
+  options: { appPort?: string; customCommand?: boolean } = {}
+): string {
+  const args = [shellQuote(runtime.command), "run", "--name", shellQuote(runtime.name)]
+  if (options.appPort) {
+    args.push("--app-port", shellQuote(options.appPort))
+  }
+  args.push("--")
+
+  if (options.customCommand) {
+    if (process.platform === "win32") {
+      args.push("cmd.exe", "/d", "/s", "/c", shellQuote(serverCommand))
+    } else {
+      args.push("sh", "-c", shellQuote(serverCommand))
+    }
+  } else {
+    args.push(serverCommand)
+  }
+
+  return args.join(" ")
 }

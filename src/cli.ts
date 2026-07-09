@@ -359,6 +359,7 @@ interface ForwardedOptions {
   dateTime?: string
   pluginReactScan?: boolean
   agentName?: string
+  portless?: boolean
 }
 
 function shellQuote(value: string): string {
@@ -390,6 +391,7 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
   if (options.dateTime) args.push("--date-time", shellQuote(options.dateTime))
   if (options.pluginReactScan) args.push("--plugin-react-scan")
   if (options.agentName) args.push("--agent-name", shellQuote(options.agentName))
+  if (options.portless === false) args.push("--no-portless")
 
   return args.join(" ")
 }
@@ -921,11 +923,11 @@ const program = new Command()
 
 program
   .name("dev3000")
-  .description("AI-powered development tools with browser monitoring and tool integrations")
+  .description("Agent-first local web debugging runtime with a managed browser")
   .version(getVersion())
 
 program
-  .description("AI-powered development tools with browser monitoring and tool integrations")
+  .description("Agent-first local web debugging runtime with a managed browser")
   .option("-p, --port <port>", "Development server port (auto-detected by project type)")
   .option("-s, --script <script>", "Script to run (e.g. dev, main.py) - auto-detected by project type")
   .option("-c, --command <command>", "Custom command to run (overrides auto-detection and --script)")
@@ -953,7 +955,8 @@ program
   .option("--debug", "Enable debug logging to console (automatically disables TUI)")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
   .option("--no-tui", "Disable TUI mode and use standard terminal output")
-  .option("--portless", "Use portless .localhost aliases instead of localhost URLs")
+  .option("--portless", "Use stable Portless URLs (default)", true)
+  .option("--no-portless", "Use a direct localhost URL instead of Portless")
   .option(
     "--date-time <format>",
     "Timestamp format: 'local' (default, e.g. 12:54:03 PM) or 'utc' (ISO string)",
@@ -1027,7 +1030,8 @@ program
         headless: options.headless,
         dateTime: options.dateTime,
         pluginReactScan: options.pluginReactScan,
-        agentName: options.agentName
+        agentName: options.agentName,
+        portless: options.portless
       })
       return
     }
@@ -1227,7 +1231,8 @@ program
           headless: options.headless,
           dateTime: options.dateTime,
           pluginReactScan: options.pluginReactScan,
-          agentName: selectedAgent.name
+          agentName: selectedAgent.name,
+          portless: options.portless
         })
         return
       }
@@ -1381,7 +1386,8 @@ program
         browserNavigationTimeoutSeconds,
         tail: options.tail,
         tui: options.tui && !options.debug, // TUI is default unless --no-tui or --debug is specified
-        portless: options.portless === true,
+        portless: options.portless !== false && process.env.PORTLESS !== "0",
+        customServerCommand: Boolean(options.command),
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
         agentName: options.agentName || undefined,
@@ -1589,6 +1595,15 @@ program
   .action(async () => {
     const { resumeLastAgent } = await import("./commands/resume.js")
     await resumeLastAgent()
+  })
+
+program
+  .command("status")
+  .description("Show whether this project's d3k runtime is ready")
+  .option("--json", "Output machine-readable runtime details")
+  .action(async (options) => {
+    const { printD3kStatus } = await import("./commands/status.js")
+    process.exitCode = printD3kStatus(options)
   })
 
 // CDP port command - get the CDP port from the session file

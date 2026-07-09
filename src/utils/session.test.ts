@@ -73,4 +73,15 @@ describe("session discovery", () => {
 
     expect(findCurrentSession()?.logFilePath).toBe("/tmp/custom.log")
   })
+
+  it("does not fall back to another project's active session", () => {
+    writeSession(join(tempHome, ".d3k", "other-project"), {
+      projectName: "other-project",
+      pid: process.pid,
+      startTime: "2026-05-01T18:00:00.000Z",
+      logFilePath: "/tmp/other.log"
+    })
+
+    expect(findCurrentSession()).toBeNull()
+  })
 })

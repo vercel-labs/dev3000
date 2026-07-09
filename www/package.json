@@ -1,6 +1,9 @@
 {
   "name": "dev3000-www",
   "version": "0.1.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "packageManager": "bun@1.2.5",
   "scripts": {
     "build": "next build --turbopack && node scripts/patch-workflow-vercel-config.mjs",
