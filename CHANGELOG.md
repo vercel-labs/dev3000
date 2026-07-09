@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.178] - 2026-07-09
+
+**Patch Release**
+
+- Make d3k an agent-first Portless runtime
+- Upgrade projects to TypeScript 7
+- Upgrade eve to 0.20.0; harden skill-runner flow and API auth
+- Document custom app URLs
+- Update generated runner to Eve
+
 ## [0.0.177] - 2026-06-19
 
 **Patch Release**
@@ -11,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Fix Dependabot dependency alerts
 - Guard d3k auth browser flows
 - Fix skill run report blob mirroring
-- Update generated ASH runner to 0.61
+- Update generated Eve runner to 0.17
 - Require mirror secret for report blob writes
 
 ## [0.0.176] - 2026-05-26

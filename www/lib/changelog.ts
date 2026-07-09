@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.178",
+    date: "2026-07-09",
+    type: "patch",
+    highlights: [
+      "Make d3k an agent-first Portless runtime",
+      "Upgrade projects to TypeScript 7",
+      "Upgrade eve to 0.20.0; harden skill-runner flow and API auth",
+      "Document custom app URLs",
+      "Update generated runner to Eve"
+    ]
+  },
+
+  {
     version: "0.0.177",
     date: "2026-06-19",
     type: "patch",
