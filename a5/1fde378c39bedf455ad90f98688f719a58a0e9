@@ -1,0 +1,135 @@
+www/components/ui/resizable.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 48
+example-apps/server-side-perf-optimizer/package.json
+  s_5f1024e05b8530::t_ca529c40c72fad 36
+www/lib/skill-runner-shell-source.ts
+  s_5f1024e05b8530::t_b1b1c7d904bc5f 9-11
+  s_5f1024e05b8530::t_87345fc7068ab8 251,275
+www/components/ui/accordion.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 53
+www/components/ui/chart.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 313
+www/components/ui/calendar.tsx
+  s_5f1024e05b8530::t_11bbb68e030cd0 72
+www/components/ui/alert.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 48
+www/components/ui/context-menu.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 197,199,202-204,210
+www/components/ui/dropdown-menu.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 205,209-210,216,218
+www/components/ui/hover-card.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 38
+www/components/ui/popover.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 42
+www/components/ui/sheet.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 103
+www/lib/dev-agent-eve-spec.ts
+  s_5f1024e05b8530::t_2169bb3bb27739 1183,1187
+  s_5f1024e05b8530::t_df204ed57da293 16-19,21-23
+example-apps/client-side-fetch-optimizer/package.json
+  s_5f1024e05b8530::t_ca529c40c72fad 36
+src/tui-interface-opentui.ts
+  s_5f1024e05b8530::t_58f1781d81ba4a 256-257
+www/components/github-link.tsx
+  s_5f1024e05b8530::t_21c012179ade04 1-10
+www/components/ui/navigation-menu.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 136-139
+www/components/ui/collapsible.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 17
+example-apps/eliminate-waterfalls/package.json
+  s_5f1024e05b8530::t_ca529c40c72fad 36
+package.json
+  s_5f1024e05b8530::t_effe32249d2a4b 86
+  s_5f1024e05b8530::t_136143b4fd9ccc 47-51,54-58,61-66,69,75
+www/package.json
+  s_5f1024e05b8530::t_1fcf0d4a525a74 55
+  s_5f1024e05b8530::t_36bb6320e44ecb 7
+  s_5f1024e05b8530::t_4c541db6626f14 17-50,52-54,56-57,61-62,64-65,67,69,71-75,77-78,80-81,83,85-86,89,91-92,96
+www/components/ui/alert-dialog.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 102-103,105,107-109,111
+www/.gitignore
+  s_5f1024e05b8530::t_ad6bada9a9fbd5 37
+www/components/ui/carousel.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 217
+www/components/ui/drawer.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 101,103-105,107
+www/components/ui/pagination.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 93,95,97
+www/components/ui/command.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 131,133-135
+example-apps/cls-fix/package.json
+  s_5f1024e05b8530::t_ca529c40c72fad 36
+www/components/ui/form.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 137
+www/components/ui/tabs.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 42
+example-apps/bundle-size-optimizer/package.json
+  s_5f1024e05b8530::t_ca529c40c72fad 36
+www/components/ui/avatar.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 34
+example-apps/design-guidelines/package.json
+  s_5f1024e05b8530::t_ca529c40c72fad 36
+www/components/ui/input-otp.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 71
+example-apps/turbopack-bundle-analyzer/package.json
+  s_5f1024e05b8530::t_ca529c40c72fad 36
+www/app/changelog/[version]/page.tsx
+  s_5f1024e05b8530::t_37f364efc6a9e5 1
+  s_5f1024e05b8530::t_ac7772e509107a 6
+  s_5f1024e05b8530::t_d5b9e9c0e18ef0 174
+scripts/update-changelog.ts
+  s_5f1024e05b8530::t_ac7772e509107a 234
+www/components/ui/table.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 75
+www/components/ui/toast.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 104-105,107-109,112
+www/hooks/use-toast.ts
+  s_5f1024e05b8530::t_ac7772e509107a 189
+example-apps/re-render-optimizer/package.json
+  s_5f1024e05b8530::t_ca529c40c72fad 36
+www/components/ui/menubar.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 221,225-227,230-231,233,235
+www/components/ui/tooltip.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 48
+src/runtime-compat.test.ts
+  s_5f1024e05b8530::t_e89af6b0b92d82 17
+www/lib/skill-runner-shell-source.test.ts
+  s_5f1024e05b8530::t_bfcb603a5d7c4f 139,169
+www/components/ui/card.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 54
+www/app/changelog/changelog-entry.tsx
+  s_5f1024e05b8530::t_c38ed1bce6f6ef 97
+  s_5f1024e05b8530::t_6118886538924e 1,3
+example-apps/react-performance/package.json
+  s_5f1024e05b8530::t_ca529c40c72fad 36
+src/tui-interface.ts
+  s_5f1024e05b8530::t_ac7772e509107a 56
+www/components/ui/breadcrumb.tsx
+  s_5f1024e05b8530::t_ac7772e509107a 88,91,93
+www/lib/dev-agent-eve-spec.test.ts
+  s_5f1024e05b8530::t_0979e0b369356d 28-29
+www/components/ui/use-toast.ts
+  s_5f1024e05b8530::t_ac7772e509107a 189
+www/app/changelog/changelog-icons.tsx
+  s_5f1024e05b8530::t_4d40eaeec96a41 27
+  s_5f1024e05b8530::t_1d54f9ac4db48b 1
+  s_5f1024e05b8530::t_ac7772e509107a 2
+bun.lock
+  s_5f1024e05b8530::t_26de3f10cc31fa 8-12,15-19,22-25,27-28,30,36,43-76,78-83,87-88,90-91,93,95,97-101,103-104,106-107,109,111-112,115,117-118,123,133,135,137,139,143,145,147,149,151,153,155,165,167,169,171,173,175,177,179,181,197,205,207,209,211,213,215,217,219,221,223,225,227,229,231,233,235,237,239,241,243,245,247,249,251,253,255,257,267,371,373,375,377,379,381,383,385,387,389,393,399,401,403,405,407,409,411,413,415,417,419,421,423,425,427,429,431,433,435,437,439,441,443,445,447,449,451,453,455,457,459,461,463,465,467,469,471,473,475,477,479,481,483,485,487,489,491,493,495,497,499,501,503,505,507-515,519,521,523,525,527,529,531,585,587,589,591,593,595,599,605,607,609,611,613,657,659,661,663,665,667,669,671,673,675,677,679,681,683,685,727,729,785,789-793,797,799,803,805,807,809,811,813,815,817,819,821,823,825,827,829,831,833,835,837,839,843,845,847,849,851,853,855,857,859,885,887,907,921,933,951,953,959,965,977,987,1001,1007,1023,1027,1029,1071,1089,1103,1107,1125,1129,1141,1157,1159,1175,1201,1217,1235,1247,1289,1295,1353,1411,1415,1453,1463,1469,1489,1491,1495,1505,1521,1529,1531,1553,1555,1557,1559,1561,1573,1581,1595,1647,1663,1689,1693,1703,1711,1715,1717,1743,1751,1757,1761,1769,1783,1813,1827,1845,1847,1851,1867,1871,1873,1875,1877,1879,1885,1887,1889,1891,1893,1895,1897,1899,1903,1937-1940,1943-1947,1951,1955,1957-1959,1961,1967-1970,1973,1979-1980,1985-1991,1993,1995,2017-2019,2025,2029,2033-2037,2039,2049,2051,2059-2062,2067,2081,2083,2085,2087,2089,2091,2093,2097-2098,2105-2106,2111-2113,2115,2117,2119,2153,2155,2157,2159,2161,2163,2165,2167,2169,2171,2173,2175,2177,2179,2181,2183,2185,2187,2189,2191,2193,2195,2197,2199,2201,2203,2205,2207,2209,2211,2213,2215,2217,2219,2221,2223,2225,2227,2229,2231,2233,2235,2237,2239,2241,2243,2245,2247,2249,2251,2253,2255,2257,2259,2261,2263,2265,2267,2269,2271,2273,2275,2277,2279,2281,2283,2285,2287,2289,2291,2293,2295,2297,2299,2301,2303,2305,2307,2309,2311,2313,2315,2317,2327,2329,2331,2333,2335,2337,2339,2351,2353,2355,2357-2371
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "a51fde378c39bedf455ad90f98688f719a58a0e9",
+  "prompts": {},
+  "sessions": {
+    "s_5f1024e05b8530": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "72a7f1ce-d551-467b-a138-d3eaa4331de2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
