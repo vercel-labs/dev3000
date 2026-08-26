@@ -1,0 +1,77 @@
+www/app/api/cloud/fix-workflow/steps.ts
+  s_b02ae0c85b6b81::t_b3c242a18a3cd8 420,457,469,495,507,532,543,1718,2879,2947,2981,3053,3533-3535,5141,5204,5822,6017,6162-6163,6756,6797,11962,12003,12315
+bunfig.toml
+  s_b02ae0c85b6b81::t_64ff3ea1265a77 13
+www/lib/blob-store.ts
+  s_b02ae0c85b6b81::t_f97d0287b0c0c1 75
+www/lib/auth-redirect.ts
+  s_b02ae0c85b6b81::t_f97d0287b0c0c1 10
+www/app/api/auth/callback/route.ts
+  s_b02ae0c85b6b81::t_5be85e5a0ffa8c 1,14-15
+www/app/api/teams/route.ts
+  s_b02ae0c85b6b81::t_5be85e5a0ffa8c 1,10-11
+package.json
+  s_b02ae0c85b6b81::t_6412c1f4a2b908 97
+  s_b02ae0c85b6b81::t_2c8a330f1bac56 91-96,98,101
+  s_b02ae0c85b6b81::t_33e158a821a28a 47-48,56,58,61-63,66,68-69,75
+  s_b02ae0c85b6b81::t_0de37ada1e2cc1 102
+  s_b02ae0c85b6b81::t_9090a815fa7039 99-100
+www/lib/cloud/d3k-sandbox.ts
+  s_b02ae0c85b6b81::t_b3c242a18a3cd8 1691,1822,1830,1918
+  s_b02ae0c85b6b81::t_c7ca67a9c5dce9 2405
+www/lib/dev-agent-eve-spec.ts
+  s_b02ae0c85b6b81::t_5be85e5a0ffa8c 1115
+www/app/dev-agents/runs/[id]/report/agent-analysis.tsx
+  s_b02ae0c85b6b81::t_b3c242a18a3cd8 3,521,524,537,540,572,575
+www/package.json
+  s_b02ae0c85b6b81::t_1140eee2183e52 17-20,49-52,54-55,62,64,66-67,69,74-75,78-80,83,85,91-93,95,99
+  s_b02ae0c85b6b81::t_d72caff9e49308 9-10
+src/cdp-monitor.ts
+  s_b02ae0c85b6b81::t_f97d0287b0c0c1 1214
+src/dev-environment.test.ts
+  s_cee72686dc69f2::t_5943537b017960 890
+  s_cee72686dc69f2::t_c1963155173fb1 871-889,891-901
+www/app/dev-agents/enable/route.ts
+  s_b02ae0c85b6b81::t_f97d0287b0c0c1 25
+www/app/api/projects/branches/route.ts
+  s_b02ae0c85b6b81::t_5be85e5a0ffa8c 1,13-14
+src/services/parsers/log-parsers/standard.ts
+  s_b02ae0c85b6b81::t_f97d0287b0c0c1 10
+www/app/api/projects/route.ts
+  s_b02ae0c85b6b81::t_5be85e5a0ffa8c 115-116
+  s_b02ae0c85b6b81::t_8a95d49f141597 1
+src/dev-environment.ts
+  s_cee72686dc69f2::t_c1963155173fb1 1883
+www/lib/skill-runners.ts
+  s_b02ae0c85b6b81::t_f97d0287b0c0c1 226,244
+bun.lock
+  s_b02ae0c85b6b81::t_6aed89caf4a4d4 8-9,17,19,22-24,28-30,36,43-46,75-78,80-81,88,90,92-93,95,100-101,104-106,109,111,117-119,122,125,130-141,144,146,148,176,178,180,182,184,186,188,190,192,208,214,268,278,280,282,284,286,288,290,292,294,296,298,300,302,304,306,308,310,312,314,316,318,320,322,324,326,328-332,346-347,388,390,392,394,396,398,400,402,404,416,418,420,422,424,426,428,430,432,434,436,438,552,554,556,558,560,562,564,566,568,570,572,574,576,578,580,582,584,586,588,590,592,594,596,598,600,602,604,606,608,610,612,616,642-643,670,734,746,748,750,804,808,810,812,816,820,822,826,828,830,832,834,836,838,840,842,844,846,848,850,852,854,856,858,862,870,872,874,876,878,886,904,906,960,976,1040,1142,1234,1300,1318,1364,1390,1392,1394,1396,1398,1400,1402,1404,1406,1408,1410,1412,1416,1426-1427,1430,1478,1482,1534,1544,1546,1550,1552,1564,1580,1592,1624,1644,1652,1660,1666,1668,1670,1688,1730,1760,1776,1784,1832,1844,1846,1864,1870,1878,1894,1926,1928,1956-1957,1960,1962,1968-1970,1988-1991,2004-2005,2036-2041,2072-2075,2080-2081,2086-2087,2100-2103,2106-2107,2118,2120,2122,2148-2149,2152-2153,2158,2160,2162,2164,2166,2172-2175,2178-2180,2190-2192,2292-2293,2302-2303
+www/AGENTS.md
+  s_b02ae0c85b6b81::t_a983ea3000f577 1-9
+www/CLAUDE.md
+  s_b02ae0c85b6b81::t_d3fff5d42b79a3 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "a72cf12f3efc4882f3b9b8581d78dd42efe894fe",
+  "prompts": {},
+  "sessions": {
+    "s_b02ae0c85b6b81": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02ad3-5f50-7a60-adda-a335d85d53dc",
+        "model": "openai/gpt-5.6-sol"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    },
+    "s_cee72686dc69f2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0407a-a761-7402-9e71-6b2a4b1e5c57",
+        "model": "openai/gpt-5.6-sol"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
