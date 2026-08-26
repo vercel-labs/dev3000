@@ -1,0 +1,46 @@
+README.md
+  s_b02ae0c85b6b81::t_2ca4fac00d89e6 45-51,67-69,83,88
+src/skills/d3k/internal-skill.md
+  s_b02ae0c85b6b81::t_2ca4fac00d89e6 22-36,42,44,52,68,74,142
+src/portless.ts
+  s_b02ae0c85b6b81::t_6f4695255ad29b 219-223
+  s_b02ae0c85b6b81::t_2b6be6de520412 229-231,236-238
+  s_b02ae0c85b6b81::t_fbd6d18e8de36c 306,310-312
+  s_b02ae0c85b6b81::t_94fb1a91ff1cd4 22-30,171-215,301-302,307-309,313-315,334-341
+  s_b02ae0c85b6b81::t_b307ace373571e 31-35,216-217,224-228,232-235,239-259,267-269,271-274
+  s_b02ae0c85b6b81::t_823b9804a03e43 218,260-266,270
+src/portless.test.ts
+  s_b02ae0c85b6b81::t_94fb1a91ff1cd4 2-8,30-55
+  s_b02ae0c85b6b81::t_b307ace373571e 56,58-70
+  s_b02ae0c85b6b81::t_d34bdfa524dc44 57
+AGENTS.md
+  s_b02ae0c85b6b81::t_2ca4fac00d89e6 8
+skills/d3k/SKILL.md
+  s_b02ae0c85b6b81::t_2ca4fac00d89e6 22-36,42,44,52,68,74,142
+src/cli.ts
+  s_b02ae0c85b6b81::t_94fb1a91ff1cd4 1423-1432,1438-1443,1453
+  s_b02ae0c85b6b81::t_823b9804a03e43 1447,1449
+  s_b02ae0c85b6b81::t_51f9edcc906404 1414-1415
+  s_b02ae0c85b6b81::t_b307ace373571e 248,1451-1452
+  s_b02ae0c85b6b81::t_304221f71ff937 1433-1437
+  s_b02ae0c85b6b81::t_68f7769d16db15 1422
+  s_b02ae0c85b6b81::t_a2972fb4107bdd 1358-1369,1403
+src/dev-environment.ts
+  s_b02ae0c85b6b81::t_94fb1a91ff1cd4 1052-1055
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "0ddb40bbd4f109c2acc255ada60650b76dfc8c2f",
+  "prompts": {},
+  "sessions": {
+    "s_b02ae0c85b6b81": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02ad3-5f50-7a60-adda-a335d85d53dc",
+        "model": "openai/gpt-5.6-sol"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}

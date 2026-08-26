@@ -1,0 +1,58 @@
+src/portless.test.ts
+  s_e24c181cd95e43::t_6d69222c5e6b8f 6,16-21
+  s_e24c181cd95e43::t_db30bc996b5740 2
+  s_e24c181cd95e43::t_ad5e5c9c9e06d3 22-23
+src/dev-environment.ts
+  s_b02ae0c85b6b81::t_e1714e03f2cacb 1487
+  s_e24c181cd95e43::t_6d69222c5e6b8f 1245
+src/portless.ts
+  s_e24c181cd95e43::t_6804403837d1a6 8
+  s_e24c181cd95e43::t_629549e4ffd3ea 162-180,191-197,221
+  s_e24c181cd95e43::t_6d69222c5e6b8f 7,137-151,198-201,206,216-220
+  s_e24c181cd95e43::t_35a4d79f455eff 222
+src/commands/status.test.ts
+  s_e24c181cd95e43::t_6d69222c5e6b8f 42,47
+skills/d3k/SKILL.md
+  s_b02ae0c85b6b81::t_4230021e0250e4 38,41,49
+README.md
+  s_b02ae0c85b6b81::t_23f9665f842cf3 46,66-67,148,188
+  s_e24c181cd95e43::t_6071ef610f7fab 84
+src/skills/d3k/internal-skill.md
+  s_b02ae0c85b6b81::t_17e924c1ba0423 41,49
+  s_e24c181cd95e43::t_7dbd4ad955ff5d 129
+  s_e24c181cd95e43::t_6071ef610f7fab 60
+AGENTS.md
+  s_e24c181cd95e43::t_6071ef610f7fab 8
+  s_b02ae0c85b6b81::t_7638a58ddb0d4d 13
+src/cli.ts
+  s_e24c181cd95e43::t_6071ef610f7fab 248,1407-1423
+  s_b02ae0c85b6b81::t_0849700256baa6 958
+  s_b02ae0c85b6b81::t_6b146a8c888697 123
+  s_b02ae0c85b6b81::t_3b46beba73f773 1039-1040,1049,1068
+  s_b02ae0c85b6b81::t_7a255ee73fcef8 1389-1390
+  s_e24c181cd95e43::t_499a9d92a2d03b 1424-1425
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "ba02830354d17bab5d2abda7e7a74aa7b67cf409",
+  "prompts": {},
+  "sessions": {
+    "s_b02ae0c85b6b81": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02ad3-5f50-7a60-adda-a335d85d53dc",
+        "model": "openai/gpt-5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    },
+    "s_e24c181cd95e43": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f443b-50ca-7603-9c49-5ddd344c2ad0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
