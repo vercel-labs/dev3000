@@ -43,6 +43,32 @@ interface ReactDebugSnapshot {
   operationsSeen: number
 }
 
+interface Dev3000InteractionTelemetry {
+  kind: "interaction"
+  interaction: {
+    timestamp: number
+    message: string
+  }
+}
+
+interface Dev3000ReactTelemetry {
+  kind: "react"
+  event: {
+    timestamp: number
+    type: string
+    rendererVersion?: string | null
+    bundleType?: number | null
+  }
+  state: {
+    connected?: boolean
+    rendererVersion?: string | null
+    bundleType?: number | null
+    operationsSeen?: number
+  }
+}
+
+type Dev3000Telemetry = Dev3000InteractionTelemetry | Dev3000ReactTelemetry
+
 const EMBEDDED_LOADING_HTML = `<!DOCTYPE html>
 <html>
 <head>
@@ -85,6 +111,7 @@ const EMBEDDED_LOADING_HTML = `<!DOCTYPE html>
 
 const DEFAULT_CDP_COMMAND_TIMEOUT_MS = 10000
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 60000
+export const DEV3000_CDP_BINDING_NAME = "__dev3000_emit"
 export const CHROME_CRASH_RESTORE_SUPPRESSION_FLAGS = [
   "--disable-session-crashed-bubble",
   "--disable-restore-session-state",
@@ -93,6 +120,51 @@ export const CHROME_CRASH_RESTORE_SUPPRESSION_FLAGS = [
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+export function parseDev3000TelemetryPayload(payload: string): Dev3000Telemetry | null {
+  try {
+    const value: unknown = JSON.parse(payload)
+    if (!isRecord(value) || (value.kind !== "interaction" && value.kind !== "react")) {
+      return null
+    }
+
+    if (value.kind === "interaction") {
+      if (!isRecord(value.interaction)) return null
+      const { timestamp, message } = value.interaction
+      if (typeof timestamp !== "number" || typeof message !== "string") return null
+      return { kind: "interaction", interaction: { timestamp, message } }
+    }
+
+    if (!isRecord(value.event) || !isRecord(value.state)) return null
+    const { timestamp, type, rendererVersion, bundleType } = value.event
+    if (typeof timestamp !== "number" || typeof type !== "string") return null
+    if (rendererVersion !== undefined && rendererVersion !== null && typeof rendererVersion !== "string") {
+      return null
+    }
+    if (bundleType !== undefined && bundleType !== null && typeof bundleType !== "number") {
+      return null
+    }
+
+    return {
+      kind: "react",
+      event: { timestamp, type, rendererVersion, bundleType },
+      state: {
+        connected: typeof value.state.connected === "boolean" ? value.state.connected : undefined,
+        rendererVersion:
+          typeof value.state.rendererVersion === "string" || value.state.rendererVersion === null
+            ? value.state.rendererVersion
+            : undefined,
+        bundleType:
+          typeof value.state.bundleType === "number" || value.state.bundleType === null
+            ? value.state.bundleType
+            : undefined,
+        operationsSeen: typeof value.state.operationsSeen === "number" ? value.state.operationsSeen : undefined
+      }
+    }
+  } catch {
+    return null
+  }
 }
 
 function patchChromePreferences(data: Record<string, unknown>): boolean {
@@ -337,6 +409,7 @@ export class CDPMonitor {
   private headless: boolean = false // Run Chrome in headless mode
   private framework?: "nextjs" | "svelte" | "other" // Framework hint from project detection
   private reactTrackingEnabled: boolean = false
+  private interactionBindingAvailable = false
   private lastReactSnapshotLogTime: number = 0
   private pendingCommands = new Map<number, PendingCDPRequest>()
   private navigationTimeoutMs: number = DEFAULT_NAVIGATION_TIMEOUT_MS
@@ -976,6 +1049,7 @@ export class CDPMonitor {
               sessionId: null,
               nextId: 1
             }
+            this.interactionBindingAvailable = false
             resolve()
           })
 
@@ -1296,7 +1370,81 @@ export class CDPMonitor {
     }
   }
 
+  private async ensureInteractionBinding(): Promise<void> {
+    if (this.interactionBindingAvailable) return
+
+    try {
+      await this.sendCDPCommand("Runtime.addBinding", {
+        name: DEV3000_CDP_BINDING_NAME
+      })
+      this.interactionBindingAvailable = true
+      this.debugLog("Installed event-driven interaction telemetry binding")
+    } catch (error) {
+      // A binding survives document navigations. Chrome reports a duplicate
+      // binding as an error on later reinjections, which is still a usable
+      // binding; only fall back to polling for other failures.
+      if (String(error).toLowerCase().includes("already")) {
+        this.interactionBindingAvailable = true
+        return
+      }
+      this.debugLog(`Runtime.addBinding unavailable; using telemetry polling fallback: ${String(error)}`)
+    }
+  }
+
+  private handleInteractionTelemetry(interaction: Dev3000InteractionTelemetry["interaction"]): void {
+    this.logger("browser", `[INTERACTION] ${interaction.message}`)
+
+    if (interaction.message.startsWith("SCROLL_SETTLED")) {
+      this.takeScreenshot("scroll-settled")
+    }
+  }
+
+  private handleReactTelemetry(
+    reactEvent: Dev3000ReactTelemetry["event"],
+    reactState: Dev3000ReactTelemetry["state"]
+  ): void {
+    if (reactEvent.type === "renderer") {
+      this.logger(
+        "browser",
+        `[REACT] renderer detected: version=${reactEvent.rendererVersion || "unknown"} mode=${this.getBundleTypeLabel(reactEvent.bundleType ?? null)}`
+      )
+      return
+    }
+
+    if (reactEvent.type === "operations-first") {
+      const rendererVersion = reactState.rendererVersion || "unknown"
+      const mode = this.getBundleTypeLabel(reactState.bundleType ?? null)
+      const operationsSeen = Number(reactState.operationsSeen || 0)
+      this.logger(
+        "browser",
+        `[REACT] devtools bridge connected: renderer=${rendererVersion} mode=${mode} ops=${operationsSeen}`
+      )
+    }
+  }
+
   private setupEventHandlers(): void {
+    // Interaction and React telemetry is delivered by Runtime.bindingCalled when
+    // Chrome supports Runtime.addBinding. This avoids a permanent polling loop
+    // and leaves the old Runtime.evaluate poll as a compatibility fallback.
+    this.onCDPEvent("Runtime.bindingCalled", (event) => {
+      const params = event.params as { name?: unknown; payload?: unknown }
+      if (params.name !== DEV3000_CDP_BINDING_NAME || typeof params.payload !== "string") {
+        return
+      }
+
+      const telemetry = parseDev3000TelemetryPayload(params.payload)
+      if (!telemetry) {
+        this.debugLog("Ignoring malformed d3k CDP telemetry payload")
+        return
+      }
+
+      if (telemetry.kind === "interaction") {
+        this.handleInteractionTelemetry(telemetry.interaction)
+      } else {
+        this.handleReactTelemetry(telemetry.event, telemetry.state)
+      }
+    })
+
     // Console messages with full context
     this.onCDPEvent("Runtime.consoleAPICalled", (event) => {
       const params = event.params as {
@@ -1750,6 +1898,8 @@ export class CDPMonitor {
 
   private async setupInteractionTracking(): Promise<void> {
     try {
+      await this.ensureInteractionBinding()
+
       // First check if tracking is already set up to avoid redundant injections
       this.debugLog("About to check if tracking is already set up...")
       const checkResult = (await this.sendCDPCommand("Runtime.evaluate", {
@@ -1764,6 +1914,7 @@ export class CDPMonitor {
 
       this.debugLog("About to inject tracking script...")
       // Full interaction tracking script with element details for replay
+      const bindingNameLiteral = JSON.stringify(DEV3000_CDP_BINDING_NAME)
       const trackingScript = `
         try {
           if (!window.__dev3000_cdp_tracking) {
@@ -1917,6 +2068,22 @@ export class CDPMonitor {
             // Listen for our custom interaction events and store them for CDP polling
             window.__dev3000_interactions = [];
 
+            // Prefer the CDP binding so telemetry crosses the browser boundary
+            // only when an event occurs. The queue remains as a fallback for
+            // older or restricted CDP implementations.
+            const emitTelemetry = (value) => {
+              const binding = window[${bindingNameLiteral}];
+              if (typeof binding === 'function') {
+                try {
+                  binding(JSON.stringify(value));
+                  return true;
+                } catch (_) {
+                  // Fall through to the compatibility queue below.
+                }
+              }
+              return false;
+            };
+
             // Lightweight React bridge telemetry (no PPR-specific parsing).
             if (!window.__dev3000_react_tracking) {
               window.__dev3000_react_tracking = true;
@@ -1929,10 +2096,17 @@ export class CDPMonitor {
               };
 
               const pushReactEvent = (event) => {
-                window.__dev3000_react_events.push({
+                const eventWithTimestamp = {
                   timestamp: Date.now(),
                   ...event
-                });
+                };
+                if (emitTelemetry({
+                  kind: 'react',
+                  event: eventWithTimestamp,
+                  state: window.__dev3000_react_state
+                })) return;
+
+                window.__dev3000_react_events.push(eventWithTimestamp);
                 if (window.__dev3000_react_events.length > 50) {
                   window.__dev3000_react_events = window.__dev3000_react_events.slice(-50);
                 }
@@ -1998,11 +2172,15 @@ export class CDPMonitor {
               }
               
               if (message) {
-                // Store interaction in array for CDP to poll, don't log to console
-                window.__dev3000_interactions.push({
+                const interaction = {
                   timestamp: Date.now(),
                   message: message
-                });
+                };
+                if (emitTelemetry({ kind: 'interaction', interaction })) return;
+
+                // Store interaction in the compatibility queue when the CDP
+                // binding is unavailable; the monitor will poll this queue.
+                window.__dev3000_interactions.push(interaction);
                 
                 // Keep only last 100 interactions to avoid memory issues
                 if (window.__dev3000_interactions.length > 100) {
@@ -2058,6 +2236,11 @@ export class CDPMonitor {
   }
 
   private startInteractionPolling(): void {
+    if (this.interactionBindingAvailable) {
+      this.debugLog("Skipping interaction telemetry polling; CDP binding is active")
+      return
+    }
+
     // Poll for interactions every 500ms to avoid console.log spam
     const pollInteractions = async () => {
       if (this.isShuttingDown) return

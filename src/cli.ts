@@ -188,20 +188,15 @@ function runLocalBrowserTool(args: string[]) {
     process.exit(1)
   }
 
-  if (subcommand !== "connect" && subcommand !== "close" && !hasExplicitCdp && !hasProfile) {
-    if (sessionCdpPort) {
-      const connectResult = spawnSync(binaryPath, ["connect", sessionCdpPort], { stdio: "pipe", env, shell: false })
-      if (needsD3kBrowser && connectResult.status !== 0) {
-        printUnsafeAgentBrowserOpenError(
-          "d3k found a browser session, but agent-browser could not connect to it.",
-          activeSession !== null
-        )
-        process.exit(connectResult.status ?? 1)
-      }
-    }
-  }
+  // agent-browser accepts --cdp on every command. Passing the active d3k
+  // endpoint directly avoids a second native process just to run `connect`.
+  const browserArgs = withD3kSessionCdp(toolArgs, {
+    sessionCdpPort,
+    hasExplicitCdp,
+    hasProfile
+  })
 
-  const result = spawnSync(binaryPath, toolArgs, {
+  const result = spawnSync(binaryPath, browserArgs, {
     stdio: "pipe",
     env,
     shell: false
@@ -226,7 +221,8 @@ import {
   getBrowserCommandInvocation,
   hasAgentBrowserOption,
   isAgentBrowserOpenCommand,
-  parseAgentBrowserInvocationArgs
+  parseAgentBrowserInvocationArgs,
+  withD3kSessionCdp
 } from "./utils/browser-command-argv.js"
 
 const browserCommandInvocation = getBrowserCommandInvocation(process.argv.slice(2))

@@ -45,7 +45,7 @@
   ],
   "dependencies": {
     "@opentui/core": "0.5.8",
-    "agent-browser": "0.34.0",
+    "agent-browser": "0.36.0",
     "chalk": "^6.0.0",
     "commander": "15.0.0",
     "ink": "7.1.1",
@@ -63,6 +63,7 @@
     "@types/react": "19.2.18",
     "@types/ws": "^8.18.1",
     "husky": "^9.1.7",
+    "react-devtools-core": "7.0.1",
     "tsx": "^4.23.12",
     "@typescript/native": "npm:typescript@^7.0.2",
     "typescript": "^7.0.2",

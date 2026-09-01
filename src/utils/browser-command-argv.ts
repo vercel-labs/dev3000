@@ -175,6 +175,24 @@ export function hasAgentBrowserOption(args: string[], option: string): boolean {
   return args.some((arg) => arg === option || arg.startsWith(`${option}=`))
 }
 
+export function withD3kSessionCdp(
+  args: string[],
+  options: { sessionCdpPort: string | null; hasExplicitCdp: boolean; hasProfile: boolean }
+): string[] {
+  const subcommand = getAgentBrowserSubcommand(args)
+  if (
+    !options.sessionCdpPort ||
+    options.hasExplicitCdp ||
+    options.hasProfile ||
+    subcommand === "connect" ||
+    subcommand === "close"
+  ) {
+    return args
+  }
+
+  return ["--cdp", options.sessionCdpPort, ...args]
+}
+
 export function hasD3kAgentBrowserWrapperFlag(args: string[]): boolean {
   return args.some((arg) => D3K_AGENT_BROWSER_WRAPPER_FLAGS.has(arg))
 }

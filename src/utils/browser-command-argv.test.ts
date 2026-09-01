@@ -4,7 +4,8 @@ import {
   getBrowserCommandInvocation,
   hasAgentBrowserOption,
   isAgentBrowserOpenCommand,
-  parseAgentBrowserInvocationArgs
+  parseAgentBrowserInvocationArgs,
+  withD3kSessionCdp
 } from "./browser-command-argv.js"
 
 describe("getBrowserCommandInvocation", () => {
@@ -85,5 +86,31 @@ describe("agent-browser invocation parsing", () => {
   it("detects options passed with separate or equals values", () => {
     expect(hasAgentBrowserOption(["--cdp", "9222", "open", "http://localhost:3000"], "--cdp")).toBe(true)
     expect(hasAgentBrowserOption(["--profile=/tmp/profile", "open", "http://localhost:3000"], "--profile")).toBe(true)
+  })
+
+  it("passes the active d3k CDP endpoint without a redundant connect process", () => {
+    expect(
+      withD3kSessionCdp(["snapshot", "-i"], {
+        sessionCdpPort: "9222",
+        hasExplicitCdp: false,
+        hasProfile: false
+      })
+    ).toEqual(["--cdp", "9222", "snapshot", "-i"])
+
+    expect(
+      withD3kSessionCdp(["--cdp", "9223", "snapshot"], {
+        sessionCdpPort: "9222",
+        hasExplicitCdp: true,
+        hasProfile: false
+      })
+    ).toEqual(["--cdp", "9223", "snapshot"])
+
+    expect(
+      withD3kSessionCdp(["close"], {
+        sessionCdpPort: "9222",
+        hasExplicitCdp: false,
+        hasProfile: false
+      })
+    ).toEqual(["close"])
   })
 })

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { WebSocket } from "ws"
+import { DEV3000_CDP_BINDING_NAME } from "./cdp-monitor.js"
 
 export interface ScreencastFrame {
   timestamp: number // ms since navigation start
@@ -23,6 +24,73 @@ interface LayoutShiftSource {
   actualRect?: { x: number; y: number; width: number; height: number } | null
 }
 
+export interface Dev3000LayoutShiftTelemetry {
+  kind: "layout-shift"
+  shift: {
+    score: number
+    timestamp: number
+    sources?: LayoutShiftSource[]
+  }
+  viewport?: Record<string, number>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function parseRect(value: unknown): { x: number; y: number; width: number; height: number } | undefined {
+  if (!isRecord(value)) return undefined
+  const { x, y, width, height } = value
+  if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number" || typeof height !== "number") {
+    return undefined
+  }
+  return { x, y, width, height }
+}
+
+export function parseDev3000LayoutShiftPayload(payload: string): Dev3000LayoutShiftTelemetry | null {
+  try {
+    const value: unknown = JSON.parse(payload)
+    if (!isRecord(value) || value.kind !== "layout-shift" || !isRecord(value.shift)) {
+      return null
+    }
+
+    const { score, timestamp, sources } = value.shift
+    if (typeof score !== "number" || typeof timestamp !== "number") return null
+
+    const parsedSources: LayoutShiftSource[] = []
+    if (sources !== undefined) {
+      if (!Array.isArray(sources)) return null
+      for (const source of sources) {
+        if (!isRecord(source)) return null
+        const parsedSource: LayoutShiftSource = {
+          node: typeof source.node === "string" ? source.node : undefined,
+          position: typeof source.position === "string" || source.position === null ? source.position : undefined,
+          previousRect: parseRect(source.previousRect),
+          currentRect: parseRect(source.currentRect),
+          actualRect: source.actualRect === null ? null : parseRect(source.actualRect)
+        }
+        parsedSources.push(parsedSource)
+      }
+    }
+
+    let viewport: Record<string, number> | undefined
+    if (value.viewport !== undefined) {
+      if (!isRecord(value.viewport)) return null
+      const entries = Object.entries(value.viewport)
+      if (entries.some(([, entry]) => typeof entry !== "number")) return null
+      viewport = Object.fromEntries(entries) as Record<string, number>
+    }
+
+    return {
+      kind: "layout-shift",
+      shift: { score, timestamp, sources: sources === undefined ? undefined : parsedSources },
+      viewport
+    }
+  } catch {
+    return null
+  }
+}
+
 /**
  * ScreencastManager - Passive screencast capture for navigation events
  *
@@ -31,6 +99,7 @@ interface LayoutShiftSource {
  */
 export class ScreencastManager {
   private ws: WebSocket | null = null
+  private bindingAvailable = false
   private buffer: BufferedFrame[] = []
   private isCapturing = false
   private navigationStartTime = 0
@@ -78,6 +147,7 @@ export class ScreencastManager {
         this.ws = new WebSocket(this.cdpUrl)
         let pageEnableId: number
         let runtimeEnableId: number
+        let bindingEnableId: number
         let pageEnabled = false
         let runtimeEnabled = false
 
@@ -88,12 +158,17 @@ export class ScreencastManager {
         }
 
         this.ws.on("open", () => {
+          this.bindingAvailable = false
           // Enable Page domain to receive navigation events
           pageEnableId = this.messageId++
           this.send("Page.enable", {}, pageEnableId)
           // Enable Runtime domain for URL checking
           runtimeEnableId = this.messageId++
           this.send("Runtime.enable", {}, runtimeEnableId)
+          // Prefer event-driven layout-shift telemetry over the compatibility
+          // polling loop. Binding failures do not block screencast startup.
+          bindingEnableId = this.messageId++
+          this.send("Runtime.addBinding", { name: DEV3000_CDP_BINDING_NAME }, bindingEnableId)
         })
 
         this.ws.on("message", (data) => {
@@ -105,6 +180,9 @@ export class ScreencastManager {
           } else if (message.id === runtimeEnableId) {
             runtimeEnabled = true
             checkReady()
+          } else if (message.id === bindingEnableId) {
+            const errorMessage = typeof message.error?.message === "string" ? message.error.message.toLowerCase() : ""
+            this.bindingAvailable = !message.error || errorMessage.includes("already")
           }
           this.handleMessage(message)
         })
@@ -158,6 +236,22 @@ export class ScreencastManager {
     // if (message.method && (message.method.startsWith("Page.") || message.method.startsWith("Network."))) {
     //   this.logFn(`[CDP] Received CDP event: ${message.method}`)
     // }
+
+    if (message.method === "Runtime.bindingCalled" && message.params) {
+      const params = message.params as { name?: unknown; payload?: unknown }
+      if (params.name === DEV3000_CDP_BINDING_NAME && typeof params.payload === "string") {
+        const telemetry = parseDev3000LayoutShiftPayload(params.payload)
+        if (telemetry) {
+          if (telemetry.viewport) {
+            this.viewportInfo = telemetry.viewport
+          }
+          this.onLayoutShift(telemetry.shift)
+        } else if (this.debug) {
+          this.logFn("[CDP] Ignoring malformed layout-shift telemetry payload")
+        }
+      }
+      return
+    }
 
     // Navigation started - check URL before capturing
     // Page.frameStartedLoading fires at the start of navigation
@@ -425,10 +519,26 @@ export class ScreencastManager {
    * Install PerformanceObserver for layout shifts (passive, no reload needed)
    */
   private installCLSObserver(): void {
+    const bindingNameLiteral = JSON.stringify(DEV3000_CDP_BINDING_NAME)
     const observerScript = `
       (function() {
         // Reset layout shifts array for new navigation
         window.__dev3000_layout_shifts__ = [];
+
+        // Prefer an event-driven CDP binding so layout shifts cross the browser
+        // boundary immediately instead of being sampled every 500ms.
+        const emitTelemetry = (value) => {
+          const binding = window[${bindingNameLiteral}];
+          if (typeof binding === 'function') {
+            try {
+              binding(JSON.stringify(value));
+              return true;
+            } catch (_) {
+              // Fall through to the compatibility queue below.
+            }
+          }
+          return false;
+        };
 
         // Update viewport info for current navigation
         window.__dev3000_viewport__ = {
@@ -490,11 +600,18 @@ export class ScreencastManager {
                   };
                 }) : [];
 
-                window.__dev3000_layout_shifts__.push({
+                const shift = {
                   score: entry.value,
                   timestamp: entry.startTime,
                   sources: sources
-                });
+                };
+                if (!emitTelemetry({
+                  kind: 'layout-shift',
+                  shift,
+                  viewport: window.__dev3000_viewport__
+                })) {
+                  window.__dev3000_layout_shifts__.push(shift);
+                }
               }
             }
           });
@@ -511,16 +628,44 @@ export class ScreencastManager {
     const evalId = this.messageId++
     this.send("Runtime.evaluate", { expression: observerScript, returnByValue: false }, evalId)
 
-    // Set up periodic polling to retrieve layout shift data
-    this.pollLayoutShifts()
+    // Set up periodic polling only for CDP implementations without bindings.
+    if (!this.bindingAvailable) {
+      this.pollLayoutShifts()
+    }
     // this.logFn("Installed CLS observer")
+  }
+
+  private onLayoutShift(shift: { score: number; timestamp: number; sources?: LayoutShiftSource[] }): void {
+    if (!this.isCapturing) return
+
+    this.layoutShifts.push(shift)
+    const element = shift.sources?.[0]?.node || "unidentified"
+    const position = shift.sources?.[0]?.position
+
+    // Only log verbose CDP diagnostics when debug mode is enabled
+    if (!this.debug) return
+
+    // Log with context about whether we can verify this shift
+    if (!shift.sources?.[0] || element === "unidentified" || position === null || position === undefined) {
+      this.logFn(
+        `[CDP] Unverified shift detected (score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms) - element could not be identified, likely fixed overlay noise`
+      )
+    } else if (position === "fixed" || position === "absolute") {
+      this.logFn(
+        `[CDP] Fixed/absolute element shift detected (${element}, position: ${position}, score: ${shift.score.toFixed(4)}) - will be filtered as overlay noise`
+      )
+    } else {
+      this.logFn(
+        `[CDP] Layout shift detected (element: ${element}, position: ${position}, score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms)`
+      )
+    }
   }
 
   /**
    * Poll for layout shift data from the injected observer
    */
   private pollLayoutShifts(): void {
-    if (!this.isCapturing) return
+    if (!this.isCapturing || this.bindingAvailable) return
 
     const pollId = this.messageId++
     const viewportId = this.messageId++
@@ -558,28 +703,8 @@ export class ScreencastManager {
         if (shifts.length > this.layoutShifts.length) {
           // New shifts detected
           const newShifts = shifts.slice(this.layoutShifts.length)
-          this.layoutShifts.push(...newShifts)
           newShifts.forEach((shift) => {
-            const element = shift.sources?.[0]?.node || "unidentified"
-            const position = shift.sources?.[0]?.position
-
-            // Only log verbose CDP diagnostics when debug mode is enabled
-            if (this.debug) {
-              // Log with context about whether we can verify this shift
-              if (!shift.sources?.[0] || element === "unidentified" || position === null || position === undefined) {
-                this.logFn(
-                  `[CDP] Unverified shift detected (score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms) - element could not be identified, likely fixed overlay noise`
-                )
-              } else if (position === "fixed" || position === "absolute") {
-                this.logFn(
-                  `[CDP] Fixed/absolute element shift detected (${element}, position: ${position}, score: ${shift.score.toFixed(4)}) - will be filtered as overlay noise`
-                )
-              } else {
-                this.logFn(
-                  `[CDP] Layout shift detected (element: ${element}, position: ${position}, score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms)`
-                )
-              }
-            }
+            this.onLayoutShift(shift)
           })
         }
       }
