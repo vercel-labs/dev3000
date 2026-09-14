@@ -10,6 +10,20 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.179",
+    date: "2026-09-14",
+    type: "patch",
+    highlights: [
+      "Upgrade agent-browser to 0.37.1",
+      "Update dependencies and fix agent startup",
+      "Require port-free HTTPS URLs for Portless routing",
+      "Make the TUI opt-in and update CLI help and skill guidance",
+      "Speed up skill-runner installs",
+      "Fix release lockfile updates, signed canary commits, and changelog links"
+    ]
+  },
+
+  {
     version: "0.0.178",
     date: "2026-07-09",
     type: "patch",

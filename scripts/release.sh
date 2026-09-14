@@ -67,43 +67,22 @@ node -e "
 # Update bun.lock for the optional dependencies
 # (bun doesn't add entries for packages that don't exist on npm yet)
 echo "🔒 Updating bun.lock for platform packages@$NEXT_VERSION..."
-node -e "
+RELEASE_VERSION="$NEXT_VERSION" node <<'NODE'
     const fs = require('fs');
+    const version = process.env.RELEASE_VERSION;
     let lockfile = fs.readFileSync('bun.lock', 'utf8');
 
-    // Update darwin-arm64
-    lockfile = lockfile.replace(
-        /('@d3k\/darwin-arm64':\n\s+specifier: )[^\n]+(\n\s+version: )[^\n]+/,
-        \"\\\$1$NEXT_VERSION\\\$2$NEXT_VERSION\"
-    );
-    lockfile = lockfile.replace(
-        /'@d3k\/darwin-arm64@[^']+'/g,
-        \"'@d3k/darwin-arm64@$NEXT_VERSION'\"
-    );
-
-    // Update linux-x64
-    lockfile = lockfile.replace(
-        /('@d3k\/linux-x64':\n\s+specifier: )[^\n]+(\n\s+version: )[^\n]+/,
-        \"\\\$1$NEXT_VERSION\\\$2$NEXT_VERSION\"
-    );
-    lockfile = lockfile.replace(
-        /'@d3k\/linux-x64@[^']+'/g,
-        \"'@d3k/linux-x64@$NEXT_VERSION'\"
-    );
-
-    // Update windows-x64
-    lockfile = lockfile.replace(
-        /('@d3k\/windows-x64':\n\s+specifier: )[^\n]+(\n\s+version: )[^\n]+/,
-        \"\\\$1$NEXT_VERSION\\\$2$NEXT_VERSION\"
-    );
-    lockfile = lockfile.replace(
-        /'@d3k\/windows-x64@[^']+'/g,
-        \"'@d3k/windows-x64@$NEXT_VERSION'\"
-    );
+    for (const platform of ['darwin-arm64', 'linux-x64', 'windows-x64']) {
+        const pattern = new RegExp(`("@d3k/${platform}":\\s*")[^"]+(")`, 'g');
+        if (!pattern.test(lockfile)) {
+            throw new Error(`Missing @d3k/${platform} in bun.lock`);
+        }
+        lockfile = lockfile.replace(pattern, `$1${version}$2`);
+    }
 
     fs.writeFileSync('bun.lock', lockfile);
     console.log('✅ Updated bun.lock');
-"
+NODE
 
 # Build compiled binaries for all platforms (AFTER version bump so version is correct)
 ./scripts/prepare-platform-packages.sh

@@ -4,6 +4,17 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.179] - 2026-09-14
+
+**Patch Release**
+
+- Upgrade agent-browser to 0.37.1
+- Update dependencies and fix agent startup
+- Require port-free HTTPS URLs for Portless routing
+- Make the TUI opt-in and update CLI help and skill guidance
+- Speed up skill-runner installs
+- Fix release lockfile updates, signed canary commits, and changelog links
+
 ## [0.0.178] - 2026-07-09
 
 **Patch Release**
