@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.180",
+  "version": "0.0.181-canary",
   "description": "Agent-first local web debugging runtime with unified server and browser context",
   "type": "module",
   "main": "dist/index.js",
@@ -70,9 +70,9 @@
     "vitest": "4.1.11"
   },
   "optionalDependencies": {
-    "@d3k/darwin-arm64": "0.0.180",
-    "@d3k/linux-x64": "0.0.180",
-    "@d3k/windows-x64": "0.0.180",
+    "@d3k/darwin-arm64": "0.0.181-canary",
+    "@d3k/linux-x64": "0.0.181-canary",
+    "@d3k/windows-x64": "0.0.181-canary",
     "@opentui/core-linux-x64": "0.5.8"
   },
   "engines": {
