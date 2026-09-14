@@ -62,9 +62,10 @@
     "@types/node": "26.3.0",
     "@types/react": "19.2.18",
     "@types/ws": "^8.18.1",
-    "husky": "^9.1.7",
-    "tsx": "^4.23.12",
     "@typescript/native": "npm:typescript@^7.0.2",
+    "husky": "^9.1.7",
+    "react-devtools-core": "8.0.0",
+    "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vitest": "4.1.11"
   },

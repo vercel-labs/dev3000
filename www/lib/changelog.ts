@@ -10,7 +10,7 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
-    version: "0.0.179",
+    version: "0.0.180",
     date: "2026-09-14",
     type: "patch",
     highlights: [
@@ -19,7 +19,8 @@ export const changelog: Release[] = [
       "Require port-free HTTPS URLs for Portless routing",
       "Make the TUI opt-in and update CLI help and skill guidance",
       "Speed up skill-runner installs",
-      "Fix release lockfile updates, signed canary commits, and changelog links"
+      "Fix release lockfile updates, signed canary commits, and changelog links",
+      "Include Ink's optional React DevTools peer when building standalone binaries"
     ]
   },
 
