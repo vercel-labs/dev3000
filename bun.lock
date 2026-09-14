@@ -31,9 +31,9 @@
         "vitest": "4.1.11",
       },
       "optionalDependencies": {
-        "@d3k/darwin-arm64": "0.0.179",
-        "@d3k/linux-x64": "0.0.179",
-        "@d3k/windows-x64": "0.0.179",
+        "@d3k/darwin-arm64": "0.0.180",
+        "@d3k/linux-x64": "0.0.180",
+        "@d3k/windows-x64": "0.0.180",
         "@opentui/core-linux-x64": "0.5.8",
       },
     },
