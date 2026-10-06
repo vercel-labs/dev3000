@@ -18,7 +18,7 @@ function isValidReportBlobPayload(value: unknown): value is {
     payload.pathname.startsWith("report-") &&
     isPublicBlobPathname(payload.pathname) &&
     typeof payload.content === "string" &&
-    (typeof payload.contentType === "undefined" || typeof payload.contentType === "string") &&
+    (typeof payload.contentType === "undefined" || payload.contentType === "application/json") &&
     (typeof maybeUserId === "undefined" || typeof maybeUserId === "string")
   )
 }
@@ -44,8 +44,14 @@ export async function POST(request: Request) {
     }
   }
 
+  try {
+    JSON.parse(body.content)
+  } catch {
+    return Response.json({ success: false, error: "Report blob content must be valid JSON" }, { status: 400 })
+  }
+
   const blob = await putBlobAndBuildUrl(body.pathname, body.content, {
-    contentType: body.contentType || "application/json",
+    contentType: "application/json",
     addRandomSuffix: false,
     allowOverwrite: true,
     absoluteUrl: true
