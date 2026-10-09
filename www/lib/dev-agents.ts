@@ -1443,12 +1443,23 @@ export async function listDevAgents(options?: { teamId?: string; teamSlug?: stri
 }
 
 export async function listCustomDevAgents(): Promise<StoredDevAgent[]> {
-  return listJsonBlobs<StoredDevAgent>(CUSTOM_DEV_AGENT_PREFIX)
+  const devAgents = await listJsonBlobs<StoredDevAgent>(CUSTOM_DEV_AGENT_PREFIX)
+  // Checked-in agents are shared and immutable. Ignore legacy overrides, including aliases.
+  return devAgents.filter((devAgent) => !getBuiltinDevAgentDefaults(devAgent.id))
 }
 
 export async function getDevAgent(devAgentId: string): Promise<DevAgent | null> {
   const canonicalDevAgentId = canonicalizeDevAgentId(devAgentId)
   const usageMap = await listDevAgentUsageStats()
+  // Do not load persisted overrides for shared agents, even if written before this restriction.
+  const builtinDevAgent = BUILTIN_DEV_AGENTS.find((devAgent) => devAgent.id === canonicalDevAgentId)
+  if (builtinDevAgent) {
+    return {
+      ...normalizeDevAgent(builtinDevAgent),
+      usageCount: usageMap.get(canonicalDevAgentId) ?? usageMap.get(devAgentId) ?? 0
+    }
+  }
+
   const candidateCustomDevAgents = await Promise.all([
     readJsonBlob<StoredDevAgent>(`${CUSTOM_DEV_AGENT_PREFIX}${devAgentId}.json`),
     canonicalDevAgentId !== devAgentId
@@ -1462,14 +1473,6 @@ export async function getDevAgent(devAgentId: string): Promise<DevAgent | null> 
   if (customDevAgent) {
     return {
       ...normalizeDevAgent(customDevAgent),
-      usageCount: usageMap.get(canonicalDevAgentId) ?? usageMap.get(devAgentId) ?? 0
-    }
-  }
-
-  const builtinDevAgent = BUILTIN_DEV_AGENTS.find((devAgent) => devAgent.id === canonicalDevAgentId)
-  if (builtinDevAgent) {
-    return {
-      ...normalizeDevAgent(builtinDevAgent),
       usageCount: usageMap.get(canonicalDevAgentId) ?? usageMap.get(devAgentId) ?? 0
     }
   }
@@ -1587,10 +1590,9 @@ export async function updateCustomDevAgent(
 ): Promise<DevAgent | null> {
   const canonicalDevAgentId = canonicalizeDevAgentId(devAgentId)
   const existingDevAgent = await getDevAgent(devAgentId)
-  if (!existingDevAgent) {
+  if (!existingDevAgent || !canEditDevAgent(existingDevAgent, input.author)) {
     return null
   }
-  const builtinDefaults = getBuiltinDevAgentDefaults(canonicalDevAgentId)
   const existingEveArtifact = existingDevAgent.eveArtifact
   const nextRevision = (existingEveArtifact?.revision ?? 1) + 1
   const { publishDevAgentEveArtifact } = await import("@/lib/dev-agent-eve")
@@ -1608,8 +1610,8 @@ export async function updateCustomDevAgent(
     devServerCommand: input.devServerCommand?.trim() || existingDevAgent.devServerCommand,
     actionSteps: normalizedActionSteps,
     skillRefs: input.skillRefs,
-    author: builtinDefaults?.author ?? input.author,
-    team: builtinDefaults?.team ?? input.team ?? existingDevAgent.team,
+    author: existingDevAgent.author,
+    team: input.team ?? existingDevAgent.team,
     updatedAt: new Date().toISOString(),
     successEval: input.successEval?.trim() || existingDevAgent.successEval,
     earlyExitMode: input.earlyExitMode ?? existingDevAgent.earlyExitMode,
@@ -1728,6 +1730,16 @@ export function isDevAgentSandboxBrowser(value: string): value is DevAgentSandbo
 }
 
 export function canEditDevAgent(devAgent: DevAgent, user: DevAgentEditor): boolean {
+  // A shared/system author is never evidence that the caller has edit privileges.
+  if (
+    getBuiltinDevAgentDefaults(devAgent.id) ||
+    devAgent.author.id === "system" ||
+    devAgent.author.username === "dev3000" ||
+    devAgent.author.email === "system@dev3000.ai"
+  ) {
+    return false
+  }
+
   if (devAgent.author.id && user.id && devAgent.author.id === user.id) {
     return true
   }
@@ -1736,9 +1748,5 @@ export function canEditDevAgent(devAgent: DevAgent, user: DevAgentEditor): boole
     return true
   }
 
-  return (
-    devAgent.author.id === "system" ||
-    devAgent.author.username === "dev3000" ||
-    devAgent.author.email === "system@dev3000.ai"
-  )
+  return false
 }
