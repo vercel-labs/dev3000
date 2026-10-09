@@ -108,9 +108,12 @@ bun run dev
 
 ## Testing Expectations
 
-The examples type-check with TypeScript 7 through `@typescript/native`. The separate
-`typescript` dependency stays on the latest 6.x release because `typescript-eslint`
-still requires its JavaScript compiler API.
+Each example uses Biome for linting (`bun run lint`) and TypeScript 7 for type
+checking (`bun run typecheck`). Biome is configured in each app so linting also
+works when an example is copied into a standalone project.
+
+The `cls-fix` example intentionally retains the `noImgElement` lint warning: its
+unsized image is part of the layout-shift scenario that workflows should fix.
 
 When running workflows against these apps:
 

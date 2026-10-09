@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 
 type Metric = {
   id: number
@@ -24,6 +24,7 @@ function buildMetrics(seed: number): Metric[] {
 }
 
 export default function ExpensiveChart() {
+  const filterId = useId()
   const [filter, setFilter] = useState(0)
   const [now, setNow] = useState(0)
 
@@ -45,8 +46,11 @@ export default function ExpensiveChart() {
           <h2 className="text-xl font-semibold text-slate-900">Operations pulse</h2>
         </div>
         <div className="flex items-center gap-3">
-          <label className="text-xs uppercase tracking-[0.2em] text-slate-400">Min score</label>
+          <label htmlFor={filterId} className="text-xs uppercase tracking-[0.2em] text-slate-400">
+            Min score
+          </label>
           <input
+            id={filterId}
             className="w-20 rounded-md border border-slate-200 px-2 py-1 text-sm"
             type="number"
             min={0}

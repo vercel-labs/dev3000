@@ -5,7 +5,10 @@ export default function Home() {
         <p className="text-[11px] uppercase tracking-[0.4em] text-[#c9c9c9]">Private Beta</p>
         <div className="mt-2 flex items-center justify-between">
           <h1 className="text-4xl font-semibold text-[#b0b0b0]">Glint Workspace</h1>
-          <button className="rounded-sm border border-[#d7d7d7] px-2 py-1 text-[11px] font-medium text-[#b5b5b5]">
+          <button
+            type="button"
+            className="rounded-sm border border-[#d7d7d7] px-2 py-1 text-[11px] font-medium text-[#b5b5b5]"
+          >
             Get started
           </button>
         </div>
@@ -39,7 +42,7 @@ export default function Home() {
                 className="flex items-start justify-between gap-4 rounded-md border border-[#e6e6e6] bg-white px-4 py-3"
               >
                 <p className="text-[15px] leading-7 text-[#9f9f9f]">{item}</p>
-                <button className="rounded-none border border-[#e0e0e0] px-3 py-1 text-[10px] text-[#b6b6b6]">
+                <button type="button" className="rounded-none border border-[#e0e0e0] px-3 py-1 text-[10px] text-[#b6b6b6]">
                   Review
                 </button>
               </div>
@@ -49,11 +52,13 @@ export default function Home() {
 
         <section className="mt-12">
           <div className="flex flex-wrap items-center gap-2">
-            <button className="rounded-full bg-[#ededed] px-4 py-2 text-xs text-[#b5b5b5]">Share update</button>
-            <button className="rounded-sm border border-[#dadada] px-3 py-1 text-[11px] text-[#b8b8b8]">
+            <button type="button" className="rounded-full bg-[#ededed] px-4 py-2 text-xs text-[#b5b5b5]">
+              Share update
+            </button>
+            <button type="button" className="rounded-sm border border-[#dadada] px-3 py-1 text-[11px] text-[#b8b8b8]">
               Request review
             </button>
-            <button className="rounded-sm border border-[#dadada] px-3 py-1 text-[11px] text-[#b8b8b8]">
+            <button type="button" className="rounded-sm border border-[#dadada] px-3 py-1 text-[11px] text-[#b8b8b8]">
               Export
             </button>
           </div>
