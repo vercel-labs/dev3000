@@ -1,6 +1,6 @@
 import chalk from "chalk"
 import { createReadStream, unwatchFile, watchFile } from "fs"
-import { Box, render, Text, useInput, useStdout } from "ink"
+import { Box, render, Text, useInput, useWindowSize } from "ink"
 import Spinner from "ink-spinner"
 import { memo, useEffect, useRef, useState } from "react"
 import type { Readable } from "stream"
@@ -178,42 +178,10 @@ const TUIApp = ({
   const [portConfirmed, setPortConfirmed] = useState<boolean>(false)
   const logIdCounter = useRef(0)
   const [clearFromLogId, setClearFromLogId] = useState<number>(0) // Track log ID to clear from
-  const { stdout } = useStdout()
+  const { columns: termWidth, rows: termHeight } = useWindowSize()
   const ctrlCMessageDefault = "" // Removed - click to focus/resize works now
   const [ctrlCMessage, setCtrlCMessage] = useState(ctrlCMessageDefault)
   const maxScrollOffsetRef = useRef(0)
-
-  const [terminalSize, setTerminalSize] = useState(() => ({
-    width: stdout?.columns || 80,
-    height: stdout?.rows || 24
-  }))
-
-  useEffect(() => {
-    if (!stdout) {
-      return
-    }
-
-    const handleResize = () => {
-      setTerminalSize({
-        width: stdout.columns || 80,
-        height: stdout.rows || 24
-      })
-    }
-
-    stdout.on("resize", handleResize)
-
-    return () => {
-      if (typeof stdout.off === "function") {
-        stdout.off("resize", handleResize)
-      } else {
-        stdout.removeListener("resize", handleResize)
-      }
-    }
-  }, [stdout])
-
-  // Get terminal dimensions with fallbacks
-  const termWidth = terminalSize.width
-  const termHeight = terminalSize.height
 
   // Determine if we should use compact mode
   const isCompact = termWidth < 80

@@ -1,5 +1,5 @@
 import { getVercelOidcToken } from "@vercel/oidc"
-import { createVercelWorld } from "@workflow/world-vercel"
+import { createWorld } from "@workflow/world-vercel"
 import { after } from "next/server"
 import { type StartOptions, start } from "workflow/api"
 import { getCurrentUserFromRequest } from "@/lib/auth"
@@ -171,7 +171,7 @@ function createSelfHostedWorkflowStartOptions({
   })
 
   return {
-    world: createVercelWorld({
+    world: createWorld({
       token: authToken
     })
   }

@@ -555,7 +555,7 @@ function workerSleepEffect(ms: number): Effect.Effect<void> {
 
 function recoverMissingWorkerProject<T>(effect: Effect.Effect<T, Error>): Effect.Effect<T | null, Error> {
   return effect.pipe(
-    Effect.catchAll((error) => (isVercelProjectNotFoundError(error) ? Effect.succeed(null) : Effect.fail(error)))
+    Effect.catch((error) => (isVercelProjectNotFoundError(error) ? Effect.succeed(null) : Effect.fail(error)))
   )
 }
 
@@ -1635,7 +1635,7 @@ function installSkillRunnerWorkerProjectEffect(
         await removeWorkerMetadataEnvVars(accessToken, team, existingProject.projectId)
         return "cleaned" as const
       }).pipe(
-        Effect.catchAll((error) =>
+        Effect.catch((error) =>
           isVercelProjectNotFoundError(error) ? Effect.succeed("missing" as const) : Effect.fail(error)
         )
       )

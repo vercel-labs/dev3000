@@ -1,6 +1,32 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { resolveSkillRunnerWorkerStatus } from "./skill-runner-worker"
+import { installSkillRunnerWorkerProject, resolveSkillRunnerWorkerStatus } from "./skill-runner-worker"
+
+describe("installSkillRunnerWorkerProject", () => {
+  const team = { id: "team_test", slug: "test", name: "Test", isPersonal: false }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("propagates access errors without trying to create a runner", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("Forbidden", { status: 403 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(installSkillRunnerWorkerProject("test-token", team)).rejects.toThrow(
+      "Failed to validate runner install: 403 Forbidden"
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("normalizes a rejected lookup without retrying it as a missing project", async () => {
+    const fetchMock = vi.fn().mockRejectedValue("network unavailable")
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(installSkillRunnerWorkerProject("test-token", team)).rejects.toThrow("network unavailable")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe("resolveSkillRunnerWorkerStatus", () => {
   it("marks a ready deployment as ready", () => {

@@ -25,7 +25,7 @@ function buildMetrics(seed: number): Metric[] {
 
 export default function ExpensiveChart() {
   const [filter, setFilter] = useState(0)
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(0)
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)

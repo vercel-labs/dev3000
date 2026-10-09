@@ -108,6 +108,10 @@ bun run dev
 
 ## Testing Expectations
 
+The examples type-check with TypeScript 7 through `@typescript/native`. The separate
+`typescript` dependency stays on the latest 6.x release because `typescript-eslint`
+still requires its JavaScript compiler API.
+
 When running workflows against these apps:
 
 - Design Guidelines Review should suggest concrete improvements to color contrast, spacing, typography, and CTA hierarchy.
