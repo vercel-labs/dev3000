@@ -4,6 +4,15 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.181] - 2026-10-09
+
+**Patch Release**
+
+- Replace ESLint with Biome in example apps
+- Upgrade dependencies and adapt to current stable APIs
+- Keep shared dev agents immutable and ignore persisted overrides
+- Constrain report uploads and isolate proxied blob content
+
 ## [0.0.180] - 2026-09-14
 
 **Patch Release**

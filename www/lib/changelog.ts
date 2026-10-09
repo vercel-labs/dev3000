@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.181",
+    date: "2026-10-09",
+    type: "patch",
+    highlights: [
+      "Replace ESLint with Biome in example apps",
+      "Upgrade dependencies and adapt to current stable APIs",
+      "Keep shared dev agents immutable and ignore persisted overrides",
+      "Constrain report uploads and isolate proxied blob content"
+    ]
+  },
+
+  {
     version: "0.0.180",
     date: "2026-09-14",
     type: "patch",
