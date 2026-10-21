@@ -26,8 +26,30 @@ function getBlobProxyBaseUrl() {
   )
 }
 
+// Reject ambiguous keys before either prefix authorization or URL resolution.
+export function isCanonicalBlobPathname(pathname: string): boolean {
+  return (
+    pathname === pathname.trim() &&
+    !/[\\%?#\p{Cc}]/u.test(pathname) &&
+    pathname.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..")
+  )
+}
+
+export function isUserOwnedBlobPathname(pathname: string, userId: string): boolean {
+  if (!/^[A-Za-z0-9_-]+$/.test(userId) || !isCanonicalBlobPathname(pathname)) return false
+  return pathname.startsWith(`workflows/${userId}/`) || pathname.startsWith(`report-users/${userId}/`)
+}
+
+export function getUserReportBlobPathname(pathname: string, userId: string): string {
+  const ownedPathname = `report-users/${userId}/${pathname}`
+  if (!/^report-[A-Za-z0-9_-]+\.json$/.test(pathname) || !isUserOwnedBlobPathname(ownedPathname, userId)) {
+    throw new Error("Invalid owned report pathname")
+  }
+  return ownedPathname
+}
+
 export function isPublicBlobPathname(pathname: string): boolean {
-  return PUBLIC_BLOB_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  return isCanonicalBlobPathname(pathname) && PUBLIC_BLOB_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
 
 export function buildBlobProxyUrl(pathname: string, options?: { absolute?: boolean }): string {
