@@ -1,7 +1,6 @@
 import type { NextConfig } from "next"
 import path from "path"
 import { fileURLToPath } from "url"
-import { withWorkflow } from "workflow/next"
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -10,19 +9,12 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   typedRoutes: true,
   cacheComponents: true,
+  partialPrefetching: true,
   compress: process.env.NODE_ENV === "production",
-  experimental: {
-    turbopackFileSystemCacheForDev: true,
-    varyParams: true,
-    optimisticRouting: true
-  },
   outputFileTracingRoot: path.join(currentDir, ".."),
-  outputFileTracingIncludes: {
-    "/*": ["../.agents/skills/**/*"]
-  },
   turbopack: {
     root: path.join(currentDir, "..")
   }
 }
 
-export default withWorkflow(nextConfig)
+export default nextConfig

@@ -27,20 +27,14 @@ This file is the source of truth for agent guidance in this repo. `CLAUDE.md` is
   ```
   The session's CDP port is auto-connected. To target a different session, run `d3k agent-browser connect <port>` first.
 
-## Local UI, Production Workflows
+## Skill Runtime
 
-- Local `www/` is for the UI only.
-- Workflow execution, workflow orchestration, and sandbox activity must run in production, not in the local Next server.
-- On localhost, workflow API routes must proxy to production instead of starting workflows or managing sandboxes in-process.
-- When testing locally, treat `localhost` as a production-backed shell:
-  - start runs from the local UI
-  - let production own workflow startup, execution, retries, and completion
-  - let production own sandbox creation, sandbox control, and sandbox logs
-  - let report pages and runs pages read workflow state from production APIs or shared remote storage
-- Do not add new local-only workflow shortcuts, localhost-only workflow execution paths, or tmp-cache fallbacks unless the user explicitly asks for them.
-- Do not make localhost the source of truth for workflow state.
-- If local workflow storage is ever needed for debugging, gate it behind an explicit env var and keep it off by default.
-- If a workflow feature behaves differently locally than in production, prefer removing the local special case rather than extending it.
+- The skill-first runtime is `src/runtime/`. Run it from the target app with `node <checkout>/skills/d3k/scripts/runtime.mjs`.
+- Its commands are `portless status`, `portless setup`, `start`, `status`, `events`, `browser`, and `stop`.
+- Retain `start` in a background session. It owns the dev server and monitored browser; do not start the legacy CLI alongside it.
+- Keep evidence in bounded memory. Persist only session discovery and the browser profile. Export screenshots only on request.
+- `www/` is a public landing page and changelog. Hosted dev agents, skill runners, workflows, sandboxes, authentication, and blob storage have been removed; do not recreate those surfaces.
+- Prefer the skill runtime for new development. The older `d3k -t` instructions above apply to the compatibility CLI.
 
 ## Browser Tools
 
@@ -109,7 +103,7 @@ Commit and push, then keep polling the new Vercel deployment until it is Ready, 
 - Follow Geist patterns already used in `www/`.
 - Use the existing neutral dark palette.
 - Do not introduce semantic success/error colors for new UI status treatments unless the existing surface already uses them.
-- Prefer existing shadcn/ui primitives and patterns from `components/dev-agents/`.
+- Prefer the existing public-site primitives in `www/components/ui/`.
 
 ## Sandbox Constraints
 

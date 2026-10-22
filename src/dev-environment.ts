@@ -2,7 +2,6 @@ import chalk from "chalk"
 import { type ChildProcess, execSync, spawn, spawnSync } from "child_process"
 import {
   appendFileSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -20,26 +19,22 @@ import { fileURLToPath } from "url"
 import { stripVTControlCharacters } from "util"
 import { CDPMonitor } from "./cdp-monitor.js"
 import { buildPortlessServerCommand, type PortlessRuntime, preparePortlessRuntime } from "./portless.js"
+import { readRuntimeSession } from "./runtime/session.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
-import { getBundledD3kSkillPath, listAvailableSkills } from "./skills/index.js"
+import { listAvailableSkills } from "./skills/index.js"
 import { DevTUI } from "./tui-interface.js"
+import { ensureD3kSkill } from "./utils/d3k-skill-installer.js"
 import { readProjectAgentName, rememberProjectAgentName } from "./utils/project-metadata.js"
 import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import {
   getApplicablePackages,
-  getSkillsPathForLocation,
   installSkillPackage,
   isPackageInstalled,
   type SkillsAgentId
 } from "./utils/skill-installer.js"
 import { formatTimestamp } from "./utils/timestamp.js"
-import {
-  checkForUpdates,
-  initTelemetrySession,
-  performUpgradeAsync,
-  sendSessionEndTelemetry
-} from "./utils/version-check.js"
+import { checkForUpdates, performUpgradeAsync } from "./utils/version-check.js"
 
 // Declare the compile-time injected version (set by bun build --define)
 declare const __D3K_VERSION__: string | undefined
@@ -660,51 +655,6 @@ export async function findAvailablePort(startPort: number): Promise<string> {
 // REMOVED: isNextjsMcpEnabled check - now using framework detection from cli.ts
 // Framework detection happens in cli.ts and is stored in session files for CLI integration
 
-/**
- * Ensure d3k skill is installed in project's skills directory.
- * Claude Code reads from .claude/skills/ (must be real files, not symlinks).
- */
-async function ensureD3kSkill(skillsAgentId?: string): Promise<void> {
-  try {
-    const bundledSkillPath = getBundledD3kSkillPath()
-    if (!bundledSkillPath) return
-
-    const targetSkillsDir = skillsAgentId ? getSkillsPathForLocation(skillsAgentId, "project")?.path : null
-
-    const skillRoots = new Set<string>()
-
-    // Install directly to the agent-specific skills dir (fallback to .agents)
-    const defaultSkillsRoot = join(process.cwd(), ".agents", "skills")
-    skillRoots.add(targetSkillsDir || defaultSkillsRoot)
-
-    // Ensure Claude Code can load the skill from .claude/skills when applicable
-    if (skillsAgentId === "claude-code") {
-      skillRoots.add(join(process.cwd(), ".claude", "skills"))
-    }
-
-    const bundledContent = readFileSync(bundledSkillPath, "utf-8")
-
-    for (const skillsRoot of skillRoots) {
-      const skillDir = join(skillsRoot, "d3k")
-      const skillPath = join(skillDir, "SKILL.md")
-
-      if (existsSync(skillPath)) {
-        const existingContent = readFileSync(skillPath, "utf-8")
-        if (existingContent === bundledContent) {
-          continue
-        }
-      }
-
-      if (!existsSync(skillDir)) {
-        mkdirSync(skillDir, { recursive: true })
-      }
-      copyFileSync(bundledSkillPath, skillPath)
-    }
-  } catch (_error) {
-    // Ignore errors - skill installation is optional
-  }
-}
-
 async function autoInstallSkills(agentId: SkillsAgentId | undefined, debugLog: (msg: string) => void): Promise<void> {
   if (!agentId) {
     return
@@ -1224,15 +1174,13 @@ export class DevEnvironment {
   }
 
   async start() {
+    if (readRuntimeSession()) throw new Error("The skill runtime already owns this project; use d3k-runtime commands")
     // Check if another instance is already running for this project
     if (!this.acquireLock()) {
       console.error(chalk.red(`\n❌ Another dev3000 instance is already running for this project.`))
       console.error(chalk.yellow(`   If you're sure no other instance is running, remove: ${this.lockFile}`))
       process.exit(1)
     }
-
-    // Initialize telemetry session (used by version check)
-    initTelemetrySession(this.options.framework)
 
     // Kill any orphaned server process from a previous run of this project
     this.cleanupOrphanedServer()
@@ -2513,9 +2461,6 @@ export class DevEnvironment {
   private async handleShutdown() {
     // Stop health monitoring
     this.stopHealthCheck()
-
-    // Send session end telemetry (fire-and-forget, won't block shutdown)
-    sendSessionEndTelemetry().catch(() => {})
 
     // Release the lock file
     this.releaseLock()

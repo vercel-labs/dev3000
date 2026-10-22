@@ -238,15 +238,14 @@ if (browserCommandInvocation && (process.argv[1]?.includes("d3k") || process.arg
 import chalk from "chalk"
 import { execSync, spawnSync } from "child_process"
 import { Command } from "commander"
-import { accessSync, appendFileSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync } from "fs"
+import { accessSync, appendFileSync, chmodSync, constants, existsSync, readFileSync } from "fs"
 import { homedir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join, resolve } from "path"
 import { fileURLToPath } from "url"
-import { runRemoteSkillCommand, shouldUseRemoteSkillRunner } from "./commands/skill-runner.js"
 import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from "./dev-environment.js"
 import { getPortlessProxyStatus, installPortlessService } from "./portless.js"
-import { getBundledD3kSkillPath, getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
+import { getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents, getSkillsAgentId } from "./utils/agent-selection.js"
 import {
@@ -256,6 +255,7 @@ import {
   validateScriptOption
 } from "./utils/cli-options.js"
 import { ensureD3kHomeDir } from "./utils/d3k-dir.js"
+import { ensureD3kSkill } from "./utils/d3k-skill-installer.js"
 import { readProjectAgentName } from "./utils/project-metadata.js"
 import { getProjectDir, getProjectDisplayName } from "./utils/project-name.js"
 import { findCurrentSession } from "./utils/session.js"
@@ -395,32 +395,6 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
   if (options.portless === false) args.push("--no-portless")
 
   return args.join(" ")
-}
-
-function ensureClaudeD3kSkill(): void {
-  try {
-    const bundledSkillPath = getBundledD3kSkillPath()
-    if (!bundledSkillPath) return
-
-    const skillsRoot = join(process.cwd(), ".claude", "skills")
-    const skillDir = join(skillsRoot, "d3k")
-    const skillPath = join(skillDir, "SKILL.md")
-
-    const bundledContent = readFileSync(bundledSkillPath, "utf-8")
-    if (existsSync(skillPath)) {
-      const existingContent = readFileSync(skillPath, "utf-8")
-      if (existingContent === bundledContent) {
-        return
-      }
-    }
-
-    if (!existsSync(skillDir)) {
-      mkdirSync(skillDir, { recursive: true })
-    }
-    copyFileSync(bundledSkillPath, skillPath)
-  } catch {
-    // Ignore errors - skill installation is optional
-  }
 }
 
 /**
@@ -1213,7 +1187,7 @@ program
           console.log(`[DEBUG] Launching tmux with agent command: ${selectedAgent.command}`)
         }
         if (skillsAgentId === "claude-code" && options.skills !== false) {
-          ensureClaudeD3kSkill()
+          ensureD3kSkill("claude-code")
         }
         // Clear screen and scrollback before launching tmux so when tmux exits, terminal is clean
         process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
@@ -1517,31 +1491,7 @@ program
   .description("Get skill content or list available skills")
   .option("-l, --list", "List all available skills")
   .option("-v, --verbose", "Show detailed skill information")
-  .option("--team <team>", "Override the inferred Vercel team slug or ID for a hosted skill run")
-  .option("--project <project>", "Override the inferred Vercel project name or ID for a hosted skill run")
-  .option("--branch <branch>", "Git branch or ref to scan")
-  .option("--project-dir <dir>", "Project root directory inside the repository")
-  .option("--base-url <url>", "dev3000 base URL")
-  .option("--wait", "Wait for the run to finish")
-  .option("--json", "Print machine-readable JSON")
-  .option("-y, --yes", "Accept a single skills.sh match and approve runner project setup without prompting")
-  .option("--no-install", "Do not install or repair the team skill runner project before starting")
   .action(async (name, options) => {
-    if (shouldUseRemoteSkillRunner(name, options)) {
-      try {
-        await runRemoteSkillCommand(name, options)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        if (options.json) {
-          console.log(JSON.stringify({ success: false, error: message }, null, 2))
-        } else {
-          console.error(chalk.red(`Error: ${message}`))
-        }
-        process.exit(1)
-      }
-      return
-    }
-
     // List skills if --list flag or no name provided
     if (options.list || !name) {
       if (options.verbose) {

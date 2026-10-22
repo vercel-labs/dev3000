@@ -22,9 +22,9 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(DEV3000_URL),
-  title: "dev3000 - AI-Powered Debugging & Development Monitoring | Vercel Labs",
+  title: "d3k - Browser and server evidence for your coding agent | Vercel Labs",
   description:
-    "Capture your web app's complete development timeline with dev3000. Unified server logs, browser events, console messages, network requests, and automatic screenshots for AI debugging. Perfect for Next.js, React, and modern web development.",
+    "Give your coding agent a managed browser and a shared timeline of server output, browser errors, and network requests with the d3k skill.",
   keywords: [
     "AI debugging",
     "web development tools",
@@ -42,8 +42,7 @@ export const metadata: Metadata = {
   publisher: "Vercel Labs",
   openGraph: {
     title: "dev3000 - AI-Powered Debugging & Development Monitoring",
-    description:
-      "Capture your web app's complete development timeline for AI debugging. Unified logs, browser events, and automatic screenshots.",
+    description: "A managed browser and a shared server/browser evidence timeline for your coding agent.",
     url: DEV3000_URL,
     siteName: "dev3000",
     type: "website",
@@ -52,8 +51,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "dev3000 - AI-Powered Debugging & Development Monitoring",
-    description:
-      "Capture your web app's complete development timeline for AI debugging. Unified logs, browser events, and automatic screenshots.",
+    description: "A managed browser and a shared server/browser evidence timeline for your coding agent.",
     creator: "@vercel"
   },
   robots: {

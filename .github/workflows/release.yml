@@ -89,27 +89,8 @@ jobs:
       - name: Run release checks
         run: ./scripts/test-release.sh
 
-      - name: Build skill-runner shell manifest
-        env:
-          SKILL_RUNNER_SHELL_VERSION: ${{ env.RELEASE_VERSION }}
-          SKILL_RUNNER_SHELL_COMMIT: ${{ github.sha }}
-          SKILL_RUNNER_SHELL_SOURCE_BASE_URL: https://raw.githubusercontent.com/vercel-labs/dev3000/${{ github.sha }}
-        run: bun run build:skill-runner-shell
-
-      - name: Build release binaries
-        run: ./scripts/prepare-platform-packages.sh
-
-      - name: Publish @d3k/darwin-arm64 to npm
-        run: npm publish --provenance --access public
-        working-directory: packages/d3k-darwin-arm64
-
-      - name: Publish @d3k/linux-x64 to npm
-        run: npm publish --provenance --access public
-        working-directory: packages/d3k-linux-x64
-
-      - name: Publish @d3k/windows-x64 to npm
-        run: npm publish --provenance --access public
-        working-directory: packages/d3k-windows-x64
+      - name: Build JavaScript package
+        run: bun run build
 
       - name: Publish dev3000 to npm
         run: npm publish --provenance --access public
@@ -141,14 +122,6 @@ jobs:
               --notes-file /tmp/release-notes.md
           fi
 
-      - name: Upload skill-runner shell manifest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "v$RELEASE_VERSION" \
-            ".artifacts/skill-runner-shell/skill-runner-shell-$RELEASE_VERSION.json" \
-            --clobber
-
       - name: Calculate next canary version
         run: |
           NEXT_CANARY_VERSION=$(node -e "
@@ -165,59 +138,6 @@ jobs:
         run: |
           npm version "$NEXT_CANARY_VERSION" --no-git-tag-version
 
-          node -e "
-            const fs = require('fs');
-            const nextVersion = process.env.NEXT_CANARY_VERSION;
-            const packagePaths = [
-              'packages/d3k-darwin-arm64/package.json',
-              'packages/d3k-linux-x64/package.json',
-              'packages/d3k-windows-x64/package.json'
-            ];
-
-            for (const pkgPath of packagePaths) {
-              const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-              pkg.version = nextVersion;
-              fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');
-            }
-
-            const rootPkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            rootPkg.optionalDependencies = rootPkg.optionalDependencies || {};
-            rootPkg.optionalDependencies['@d3k/darwin-arm64'] = nextVersion;
-            rootPkg.optionalDependencies['@d3k/linux-x64'] = nextVersion;
-            rootPkg.optionalDependencies['@d3k/windows-x64'] = nextVersion;
-            fs.writeFileSync('package.json', JSON.stringify(rootPkg, null, 2) + '\\n');
-          "
-
-          node <<'NODE'
-            const fs = require("fs");
-            const nextVersion = process.env.NEXT_CANARY_VERSION;
-            const platformPackages = [
-              "@d3k/darwin-arm64",
-              "@d3k/linux-x64",
-              "@d3k/windows-x64"
-            ];
-            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            let lockfile = fs.readFileSync("bun.lock", "utf8");
-
-            for (const packageName of platformPackages) {
-              const escapedPackageName = escapeRegExp(packageName);
-              lockfile = lockfile.replace(
-                new RegExp(`("${escapedPackageName}":\\s*")[^"]+(")`, "g"),
-                `$1${nextVersion}$2`
-              );
-              lockfile = lockfile.replace(
-                new RegExp(`('${escapedPackageName}':\\n\\s+specifier: )[^\\n]+(\\n\\s+version: )[^\\n]+`),
-                `$1${nextVersion}$2${nextVersion}`
-              );
-              lockfile = lockfile.replace(
-                new RegExp(`'${escapedPackageName}@[^']+'`, "g"),
-                `'${packageName}@${nextVersion}'`
-              );
-            }
-
-            fs.writeFileSync("bun.lock", lockfile);
-          NODE
-
       - name: Commit and push next canary
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -228,9 +148,6 @@ jobs:
             const fs = require("fs");
             const paths = [
               "package.json",
-              "packages/d3k-darwin-arm64/package.json",
-              "packages/d3k-linux-x64/package.json",
-              "packages/d3k-windows-x64/package.json",
               "bun.lock"
             ];
             const additions = paths.map((path) => ({

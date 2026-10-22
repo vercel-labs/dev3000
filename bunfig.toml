@@ -4,12 +4,6 @@ minimumReleaseAge = 172800
 # Bun requires exact package names here; scope globs are not supported.
 minimumReleaseAgeExcludes = [
   "@vercel/analytics",
-  "@vercel/blob",
-  "@vercel/oidc",
-  "@vercel/sandbox",
-  "@vercel/sdk",
   "@vercel/speed-insights",
-  "@workflow/world-vercel",
-  "@workflow/world",
   "turbo",
 ]

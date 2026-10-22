@@ -146,3 +146,22 @@ describe("Chrome restore prompt suppression", () => {
     expect(killInstanceChromeProcesses).not.toHaveBeenCalled()
   })
 })
+
+describe("monitored target ownership", () => {
+  it("ignores unrelated destroyed targets and stops only when its page closes", () => {
+    const monitor = new CDPMonitor("/tmp/d3k-profile", "/tmp/d3k-screenshots", () => {})
+    const onClosed = vi.fn()
+    monitor.setOnWindowClosedCallback(onClosed)
+    const internal = monitor as unknown as {
+      cdpUrl: string
+      setupEventHandlers(): void
+      handleCDPMessage(message: { method: string; params: Record<string, unknown> }): void
+    }
+    internal.cdpUrl = "ws://localhost:9222/devtools/page/owned"
+    internal.setupEventHandlers()
+    internal.handleCDPMessage({ method: "Target.targetDestroyed", params: { targetId: "worker" } })
+    expect(onClosed).not.toHaveBeenCalled()
+    internal.handleCDPMessage({ method: "Target.targetDestroyed", params: { targetId: "owned" } })
+    expect(onClosed).toHaveBeenCalledOnce()
+  })
+})

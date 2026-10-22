@@ -312,6 +312,17 @@ export function selectCDPTarget(
 }
 
 export class CDPMonitor {
+  private eventObserver?: (event: CDPEvent) => void
+  private automaticScreenshots = true
+
+  setEventObserver(observer: (event: CDPEvent) => void): void {
+    this.eventObserver = observer
+  }
+
+  setAutomaticScreenshots(enabled: boolean): void {
+    this.automaticScreenshots = enabled
+  }
+
   private browser: ChildProcess | null = null
   private connection: CDPConnection | null = null
   private debugPort: number = 9222
@@ -553,7 +564,7 @@ export class CDPMonitor {
   }
 
   getCdpUrl(): string | null {
-    return this.cdpUrl
+    return this.connection?.ws.readyState === 1 ? this.cdpUrl : null
   }
 
   getChromePids(): number[] {
@@ -1609,7 +1620,8 @@ export class CDPMonitor {
       this.logger("browser", `[TARGET] Window/tab closed: ${params.targetId}`)
 
       // If this is our main tab/window being closed, trigger shutdown callback
-      if (this.onWindowClosedCallback && !this.isShuttingDown) {
+      const monitoredTarget = this.cdpUrl?.split("/").pop()
+      if (params.targetId === monitoredTarget && this.onWindowClosedCallback && !this.isShuttingDown) {
         this.debugLog("Chrome window was manually closed, triggering d3k shutdown")
         this.logger("browser", "[TARGET] Chrome window manually closed, shutting down d3k")
         this.onWindowClosedCallback()
@@ -1663,6 +1675,12 @@ export class CDPMonitor {
 
     if (message.method) {
       this.debugLog(`Received CDP event: ${message.method}`)
+      this.eventObserver?.({
+        method: message.method,
+        params: message.params || {},
+        timestamp: Date.now(),
+        sessionId: message.sessionId
+      })
       const handler = this.eventHandlers.get(message.method)
       if (handler) {
         const event: CDPEvent = {
@@ -1836,8 +1854,7 @@ export class CDPMonitor {
                 id: el.id || '',
                 className: el.className || '',
                 name: el.name || '',
-                type: el.type || '',
-                value: el.value || ''
+                type: el.type || ''
               };
               return JSON.stringify(details);
             }
@@ -1864,7 +1881,7 @@ export class CDPMonitor {
               let details = getElementDetails(e.target);
               // Send interaction data via custom event instead of console.log to avoid user visibility
               window.dispatchEvent(new CustomEvent('dev3000-interaction', {
-                detail: { type: 'KEY', key: e.key, element: details }
+                detail: { type: 'KEY', key: e.key.length === 1 ? '[character]' : e.key, element: details }
               }));
             });
             
@@ -2179,6 +2196,7 @@ export class CDPMonitor {
   }
 
   private async takeScreenshot(event: string): Promise<string | null> {
+    if (!this.automaticScreenshots) return null
     try {
       // Throttle screenshots to avoid spam
       const now = Date.now()

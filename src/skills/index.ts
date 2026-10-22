@@ -2,7 +2,7 @@
  * Skill module for d3k
  *
  * Skills are managed by `npx skills` and stored in .agents/skills/
- * d3k also bundles its own skill which gets copied to .agents/skills/d3k/ on startup.
+ * d3k also bundles a project-local fallback for agents without a global d3k skill.
  */
 
 import { existsSync, readdirSync, readFileSync } from "fs"

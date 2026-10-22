@@ -6,32 +6,29 @@
   "main": "dist/index.js",
   "bin": {
     "dev3000": "./bin/dev3000",
-    "d3k": "./bin/dev3000"
+    "d3k": "./bin/dev3000",
+    "d3k-runtime": "./bin/d3k-runtime"
   },
   "files": [
     "bin/",
     "dist/",
     "src/tui-interface-impl.tsx",
-    "README.md"
+    "README.md",
+    "skills/d3k/"
   ],
   "scripts": {
-    "build": "./node_modules/@typescript/native/bin/tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/ && rm -rf dist/skills && cp -r src/skills dist/",
+    "build": "./node_modules/@typescript/native/bin/tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/ && mkdir -p dist/skills && cp -r src/skills/d3k dist/skills/",
     "typegen": "./scripts/typegen.sh",
     "typecheck": "./node_modules/@typescript/native/bin/tsc --noEmit && bun run --filter '*' typecheck",
     "format": "biome format --write .",
     "lint": "biome check src www scripts --vcs-use-ignore-file=true",
     "lint:fix": "biome check --write src www scripts",
     "test": "vitest run",
-    "test-postinstall": "tsx scripts/test-postinstall.ts",
     "test-release": "./scripts/test-release.sh",
     "canary:smoke": "bun run scripts/canary-smoke-test.ts",
-    "build:skill-runner-shell": "bun run scripts/build-skill-runner-shell-artifact.ts",
-    "_postinstall": "node scripts/check-install.js || exit 0",
     "_prepare": "husky",
     "release": "./scripts/release.sh",
-    "canary": "./scripts/canary.sh",
-    "build:binaries": "bun run scripts/build-binaries.ts",
-    "smoke:skill-runner-install": "bun run scripts/smoke-skill-runner-install.ts"
+    "canary": "./scripts/canary.sh"
   },
   "keywords": [
     "nextjs",
@@ -68,12 +65,6 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "5.0.3"
-  },
-  "optionalDependencies": {
-    "@d3k/darwin-arm64": "0.0.183-canary",
-    "@d3k/linux-x64": "0.0.183-canary",
-    "@d3k/windows-x64": "0.0.183-canary",
-    "@opentui/core-linux-x64": "0.5.17"
   },
   "engines": {
     "node": ">=24.0.0"

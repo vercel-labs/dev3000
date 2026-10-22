@@ -1,7 +1,6 @@
 import { execSync, spawnSync } from "child_process"
-import { randomUUID } from "crypto"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
-import { homedir, platform } from "os"
+import { homedir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 
@@ -22,77 +21,6 @@ interface CachedVersionInfo {
 
 const CACHE_TTL_MS = 1000 * 60 * 60 // 1 hour cache
 
-// Telemetry API endpoint
-const TELEMETRY_API_URL = "https://dev3000.ai/api/version"
-
-// Session tracking for telemetry
-let sessionId: string | null = null
-let sessionStartTime: number | null = null
-let sessionFramework: string | null = null
-
-/**
- * Check if this is a canary version (skip telemetry for local testing)
- */
-function isCanaryVersion(): boolean {
-  return getCurrentVersion().includes("-canary")
-}
-
-/**
- * Initialize a new telemetry session
- * Call this once at CLI startup
- * Skips telemetry for canary versions
- */
-export function initTelemetrySession(framework?: string): { sessionId: string; startTime: number } | null {
-  if (isCanaryVersion()) return null
-  sessionId = randomUUID()
-  sessionStartTime = Date.now()
-  sessionFramework = framework || null
-  return { sessionId, startTime: sessionStartTime }
-}
-
-/**
- * Get current session info (returns null if not initialized)
- */
-export function getTelemetrySession(): { sessionId: string; startTime: number } | null {
-  if (!sessionId || !sessionStartTime) return null
-  return { sessionId, startTime: sessionStartTime }
-}
-
-/**
- * Send session end telemetry (fire-and-forget with short timeout)
- */
-export async function sendSessionEndTelemetry(): Promise<void> {
-  if (!sessionId || !sessionStartTime) return
-
-  const duration = Math.round((Date.now() - sessionStartTime) / 1000) // seconds
-  const currentVersion = getCurrentVersion()
-
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 2000) // 2 second timeout
-
-    await fetch(TELEMETRY_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sid: sessionId,
-        os: platform(),
-        v: currentVersion,
-        d: duration,
-        fw: sessionFramework
-      }),
-      signal: controller.signal
-    })
-
-    clearTimeout(timeout)
-  } catch {
-    // Silently ignore - telemetry should never affect CLI behavior
-  }
-}
-
-/**
- * Get the cache file path for version info
- */
 function getCacheFilePath(): string {
   return join(homedir(), ".d3k", "version-cache.json")
 }
@@ -157,45 +85,13 @@ export function getCurrentVersion(): string {
 }
 
 /**
- * Fetch the latest version from our API (with telemetry) or npm registry as fallback
+ * Fetch the latest version directly from npm
  */
 export async function fetchLatestVersion(): Promise<string | null> {
   // Check cache first
   const cached = readCachedVersion()
   if (cached) {
     return cached
-  }
-
-  // Try our API first (includes telemetry tracking)
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 3000)
-
-    // Build URL with telemetry params if session is active
-    const url = new URL(TELEMETRY_API_URL)
-    if (sessionId) {
-      url.searchParams.set("sid", sessionId)
-      url.searchParams.set("os", platform())
-      url.searchParams.set("v", getCurrentVersion())
-      if (sessionFramework) {
-        url.searchParams.set("fw", sessionFramework)
-      }
-    }
-
-    const response = await fetch(url.toString(), {
-      signal: controller.signal
-    })
-    clearTimeout(timeout)
-
-    if (response.ok) {
-      const data = await response.json()
-      if (data.version) {
-        writeCachedVersion(data.version)
-        return data.version
-      }
-    }
-  } catch {
-    // Our API failed, fall through to npm fallback
   }
 
   // Fallback to npm directly (no telemetry)

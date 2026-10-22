@@ -1,143 +1,32 @@
 ---
-name: "d3k"
-description: "Use when the user asks to use d3k, run/dev/test/debug a web project with d3k, or reproduce a browser issue. Own the runtime: reuse or background-start d3k non-interactively, wait for readiness, use its project-stable managed Chrome profile, and inspect unified browser/server evidence."
+name: d3k
+description: Run and debug a local web app with a managed browser and a shared server/browser evidence timeline. Use when asked to develop, test, or reproduce a browser issue with d3k.
 ---
 
-# d3k Agent Runtime
+# d3k
 
-d3k is the local web runtime for this task. It starts the dev server behind a stable Portless URL, owns a project-stable Chrome profile, and records server logs, browser console output, network activity, interactions, and screenshots in one timeline.
+Own the project's dev server and monitored browser through a small background runtime. No global d3k installation is needed. Evidence stays in bounded memory; browser authentication stays in the project Chrome profile.
 
-When this skill triggers, operate d3k. Do not merely tell the user how to run it.
+Use `d3k-runtime` as `runtime` below when running from an installed dev3000 package, or `bunx --package dev3000 d3k-runtime` without a global install. Run from the **target project root**. For unreleased development use `node <dev3000-checkout>/skills/d3k/scripts/runtime.mjs` instead; that helper runs the checkout source without downloading a published version.
 
-## Interpret the Request
+## Prepare
 
-- "Let me test/dev my project with d3k": prepare the runtime and headed browser, confirm it is ready, then hand control to the user. Wait for them to reproduce the issue before inspecting evidence.
-- "Test/debug/fix this with d3k": prepare the runtime, then drive the managed browser and investigate autonomously.
-- If ambiguous, start the runtime and browser first. That action is safe and useful for either path.
+1. Run `runtime portless status`. Canonical HTTPS must be ready (`canonical: true`, `serviceInstalled: true`, `setupRequired: false`) before starting the app or browser. If needed run `runtime portless setup`, wait for the one-time administrator authorization, then check again. Stop if setup is unavailable; never silently substitute direct localhost.
+2. Run `runtime status`. Reuse a ready runtime for this project. If it is starting, wait for readiness. Do not start another dev server. A legacy d3k session must be stopped before switching runtimes.
+3. Start `runtime start` in a retained background tool session. Keep its process handle. The runtime detects the package manager and `dev` script; use `--command '<dev command>'` when needed. Poll `runtime status` until `ready: true` and `browserConnected: true` with a port-free `https://...localhost` URL. Inspect `runtime events` if startup fails while the runtime is still alive, and the retained process output if it exits.
 
-## Start or Reuse d3k
+## Reproduce and inspect
 
-Run from the project root.
+- For “let me test,” give the user the app URL and leave the browser running while they reproduce the issue.
+- For autonomous debugging, drive the same browser with `runtime browser snapshot -i`, `runtime browser click @e2`, and other agent-browser commands. The runtime supplies the CDP connection; never open a separate browser or profile.
+- Before a reproduction, read `runtime status` and keep its `sessionId` and `cursor`.
+- After the interaction, read `runtime events --session <id> --after <cursor>`. Server output, console messages, exceptions, network requests, and navigation share sequence numbers. Requests and responses carry CDP request IDs; adjacent server lines are chronological context, not proof of causation.
+- Continue from the returned `cursor` while `hasMore` is true. Use `--limit 1..500`, `--source server|browser|runtime`, or `--level error` for focused reads. For error context, read the unfiltered interval as well. Filters advance the cursor through examined events; retain the original cursor if you need another view of the same interval.
+- `reset: true` means the runtime restarted. `dropped` reports evicted events. Never claim complete evidence across either gap. Replay the interaction if necessary.
+- Fix the code and repeat the same interaction, then inspect the new interval. Keep the runtime alive across edits.
 
-1. Check canonical Portless readiness before starting any app process:
+## Lifecycle
 
-```bash
-d3k portless status --json
-```
+Keep the runtime's project-stable profile for sign-in state. Use `--headless` for CI or when requested; `--servers-only` deliberately omits the browser. Automatic screenshots and persistent log files are off; request a screenshot through `runtime browser screenshot <absolute-path>` when visual evidence is needed.
 
-If `"setupRequired": true`, run:
-
-```bash
-d3k portless setup
-```
-
-On macOS this opens the system administrator authorization dialog. Wait for the user to approve it, then rerun `d3k portless status --json`. Do not start d3k until `"canonical": true`, `"serviceInstalled": true`, and `"setupRequired": false`. If authorization is declined or unavailable, stop and explain the blocker. Never silently substitute direct localhost.
-
-2. Check for an existing project runtime:
-
-```bash
-d3k status --json
-```
-
-Reuse it only if it reports `"running": true`, `"ready": true`, `"routing": "portless"`, `"browserConnected": true`, and a genuinely port-free `https://...localhost` `appUrl`. If an active session reports `"routing": "direct"`, stop that retained d3k session and restart after Portless is ready. Do not start a second dev server or browser.
-
-3. If d3k is not installed, install it:
-
-```bash
-bun install -g dev3000
-```
-
-Use `npm install -g dev3000` only when Bun is unavailable.
-
-4. Start d3k with the agent's shell/process tool as a retained background or yielded session:
-
-```bash
-d3k -t
-```
-
-Do not wait for this long-running command to exit. Keep its process/session handle so you can monitor or stop it later. Prefer the execution tool's background/session support over shelling with `&`.
-
-If the target URL is already known, pass it so the managed browser opens there:
-
-```bash
-d3k -t --app-url "<url>"
-```
-
-Let d3k auto-detect the package manager, dev command, and port. Add `--command`, `--script`, or `--port` only when detection is wrong or the user specified them.
-
-5. Poll until the runtime is ready:
-
-```bash
-d3k status --json
-```
-
-A successful status response is the readiness boundary only when it reports `"ready": true`, `"routing": "portless"`, `"browserConnected": true`, and a port-free `https://...localhost` `appUrl`. The underlying app port may still change between runs. If startup fails, inspect the retained process output and `d3k logs --type server`; do not launch a separate dev server.
-
-## User-Driven Testing
-
-When the user says "let me test":
-
-1. Confirm the status response includes the app URL and `"browserConnected": true`.
-2. Tell the user the monitored browser is ready.
-3. Keep the d3k process running and wait for the user to reproduce the behavior.
-4. When they report that it happened, begin with:
-
-```bash
-d3k errors --context
-d3k logs -n 200
-```
-
-Do not replace the headed browser with automation while the user is testing.
-
-## Agent-Driven Testing
-
-Drive the exact browser d3k is monitoring:
-
-```bash
-d3k agent-browser snapshot -i
-d3k agent-browser click @e2
-d3k agent-browser fill @e3 "text"
-d3k errors --context
-```
-
-Use `--require-d3k-browser` when opening a URL so failure cannot silently create another browser:
-
-```bash
-d3k agent-browser --require-d3k-browser open "<url>"
-```
-
-After every reproduction or code change, replay the relevant interaction and check `d3k errors --context` again.
-
-## Evidence Commands
-
-Prefer these over ad-hoc log scraping:
-
-```bash
-d3k status --json
-d3k errors --context
-d3k logs -n 200
-d3k logs --type browser
-d3k logs --type server
-```
-
-Artifacts live under `~/.d3k/<project>/`, including `session.json`, logs, screenshots, and the Chrome profile.
-
-## Browser and Auth Safety
-
-d3k must own browser startup by default. Its per-project Chrome profile preserves login state, cookies, and local storage.
-
-For Google OAuth, Supabase auth, and other auth-sensitive flows, never substitute raw Chrome, Playwright, a browser MCP session, manual CDP attachment, or `agent-browser --profile`. Those paths use a different browser/profile and can trigger "This browser or app may not be secure."
-
-If the managed browser is unavailable, stop or interrupt the retained d3k process and restart d3k cleanly. Do not work around it by creating another browser.
-
-Use `--headless` only for CI or when explicitly requested. Use `--servers-only` only when browser monitoring is intentionally unwanted.
-
-## Operating Rules
-
-- Do not run `npm run dev`, `bun run dev`, or another dev server alongside d3k.
-- Do not start a second d3k when `d3k status --json` reports an active one.
-- Keep d3k alive across edits and retests.
-- Preserve the project-stable Chrome profile unless the user explicitly asks for a fresh profile.
-- Leave the runtime running when handing a headed browser to the user; stop it only when asked or when the task requires a clean restart.
-- Canonical Portless HTTPS routing is required by default. Never add `--no-portless` or set `PORTLESS=0` unless the user explicitly requests direct localhost routing.
-- Treat Portless as active only when the reported URL is genuinely port-free. Never describe a URL with an explicit proxy port as Portless routing.
+Stop with `runtime stop` or the retained process handle when asked. Leaving the browser open for user testing means leaving the runtime alive. Events are lost when it exits; only profile and session discovery data persist. Console/server text may contain application secrets; inspect selectively and avoid copying sensitive values into reports.
