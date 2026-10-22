@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.182] - 2026-10-22
+
+**Patch Release**
+
+- Bind user-facing blob operations to the authenticated owner
+
 ## [0.0.181] - 2026-10-09
 
 **Patch Release**

@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.182",
+    date: "2026-10-22",
+    type: "patch",
+    highlights: [
+      "Bind user-facing blob operations to the authenticated owner"
+    ]
+  },
+
+  {
     version: "0.0.181",
     date: "2026-10-09",
     type: "patch",
