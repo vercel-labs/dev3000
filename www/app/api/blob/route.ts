@@ -1,5 +1,10 @@
 import { getCurrentUser } from "@/lib/auth"
-import { isPublicBlobPathname, readBlobResponse } from "@/lib/blob-store"
+import {
+  isCanonicalBlobPathname,
+  isPublicBlobPathname,
+  isUserOwnedBlobPathname,
+  readBlobResponse
+} from "@/lib/blob-store"
 
 const INLINE_RASTER_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"])
 
@@ -14,14 +19,18 @@ export async function GET(request: Request) {
   // The proxy only ever addresses stored blobs by pathname. Reject absolute
   // URLs so this route can't be used as an authenticated SSRF primitive
   // (readBlobResponse would otherwise fetch an arbitrary http(s) target).
-  if (/^https?:\/\//i.test(pathname)) {
+  if (/^https?:\/\//i.test(pathname) || !isCanonicalBlobPathname(pathname)) {
     return new Response("Invalid pathname", { status: 400 })
   }
 
-  if (!isPublicBlobPathname(pathname)) {
+  const isPublic = isPublicBlobPathname(pathname)
+  if (!isPublic) {
     const user = await getCurrentUser()
     if (!user) {
       return new Response("Unauthorized", { status: 401 })
+    }
+    if (!isUserOwnedBlobPathname(pathname, user.id)) {
+      return new Response("Forbidden", { status: 403 })
     }
   }
 
@@ -35,6 +44,7 @@ export async function GET(request: Request) {
   // SVG or HTML) on the application origin. Fetch-based JSON/archive readers are
   // unaffected by the download headers.
   const headers = new Headers(response.headers)
+  if (!isPublic) headers.set("cache-control", "private, no-store")
   const contentType = headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || ""
   const isRasterImage = INLINE_RASTER_IMAGE_TYPES.has(contentType)
   headers.set("content-type", isRasterImage ? contentType : "application/octet-stream")

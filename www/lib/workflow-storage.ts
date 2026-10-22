@@ -2,7 +2,13 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { list } from "@vercel/blob"
-import { deleteBlobByPathOrUrl, putBlobAndBuildUrl, readBlobJson } from "@/lib/blob-store"
+import {
+  deleteBlobByPathOrUrl,
+  isUserOwnedBlobPathname,
+  putBlobAndBuildUrl,
+  readBlobJson,
+  resolveBlobPathname
+} from "@/lib/blob-store"
 import { getWorkflowReportCostUsd } from "@/lib/workflow-report-summary"
 import type { WebVitals, WorkflowReport } from "@/types"
 
@@ -171,8 +177,16 @@ async function readWorkflowRunBlob(pathOrUrl: string): Promise<WorkflowRun | nul
  * Save a workflow run to blob storage
  * Path format: workflows/{userId}/{timestamp}-{projectName}.json
  */
+function getWorkflowRunPathname(run: Pick<WorkflowRun, "userId" | "timestamp" | "projectName">): string {
+  const pathname = `workflows/${run.userId}/${run.timestamp}-${run.projectName}.json`
+  if (!isUserOwnedBlobPathname(pathname, run.userId)) {
+    throw new Error("Invalid workflow run pathname")
+  }
+  return pathname
+}
+
 export async function saveWorkflowRun(run: WorkflowRun): Promise<string> {
-  const path = `workflows/${run.userId}/${run.timestamp}-${run.projectName}.json`
+  const path = getWorkflowRunPathname(run)
   await saveLocalWorkflowRun(run)
 
   const blob = await putBlobAndBuildUrl(path, JSON.stringify(run, null, 2), {
@@ -391,31 +405,24 @@ export async function deleteWorkflowRuns(
   let deleted = 0
 
   for (const run of runsToDelete) {
-    const pathsToDelete: string[] = []
-
-    // Collect all blob URLs associated with this run
-    // The workflow run JSON file
-    const runPath = `workflows/${userId}/${run.timestamp}-${run.projectName}.json`
-    const { blobs } = await list({ prefix: runPath })
-    for (const blob of blobs) {
-      pathsToDelete.push(blob.pathname)
-    }
-
-    // Screenshots
-    if (run.beforeScreenshotUrl) {
-      pathsToDelete.push(run.beforeScreenshotUrl)
-    }
-    if (run.afterScreenshotUrl) {
-      pathsToDelete.push(run.afterScreenshotUrl)
-    }
-
-    // Report blob
-    if (run.reportBlobUrl) {
-      pathsToDelete.push(run.reportBlobUrl)
-    }
-
-    // Delete all collected paths/URLs
     try {
+      // Metadata is client-writable, including records saved before this check.
+      // Derive the run key from the authenticated owner and delete only that key,
+      // not every object sharing a prefix.
+      const runPath = getWorkflowRunPathname({ ...run, userId })
+      const pathsToDelete = [runPath]
+      for (const reference of [run.beforeScreenshotUrl, run.afterScreenshotUrl, run.reportBlobUrl]) {
+        if (typeof reference !== "string") continue
+        try {
+          const pathname = resolveBlobPathname(reference)
+          if (isUserOwnedBlobPathname(pathname, userId)) pathsToDelete.push(pathname)
+        } catch {
+          // Invalid references do not authorize deletion.
+        }
+      }
+
+      // Legacy global reports/screenshots have no trustworthy owner binding.
+      // Retain them rather than inferring ownership from client-written metadata.
       if (pathsToDelete.length > 0) {
         await Promise.all(pathsToDelete.map((item) => deleteBlobByPathOrUrl(item)))
         console.log(`[Workflow Storage] Deleted ${pathsToDelete.length} blobs for run ${run.id}`)
