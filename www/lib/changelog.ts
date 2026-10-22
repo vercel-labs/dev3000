@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.182",
     date: "2026-10-22",
     type: "patch",
-    highlights: [
-      "Bind user-facing blob operations to the authenticated owner"
-    ]
+    highlights: ["Bind user-facing blob operations to the authenticated owner"]
   },
 
   {
