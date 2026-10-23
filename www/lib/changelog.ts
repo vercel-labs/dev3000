@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.183",
+    date: "2026-10-23",
+    type: "patch",
+    highlights: [
+      "Use pnpm for skill installation and runtime launch",
+      "Make d3k skill-first and remove hosted agent infrastructure"
+    ]
+  },
+
+  {
     version: "0.0.182",
     date: "2026-10-22",
     type: "patch",

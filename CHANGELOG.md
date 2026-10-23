@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.183] - 2026-10-23
+
+**Patch Release**
+
+- Use pnpm for skill installation and runtime launch
+- Make d3k skill-first and remove hosted agent infrastructure
+
 ## [0.0.182] - 2026-10-22
 
 **Patch Release**
