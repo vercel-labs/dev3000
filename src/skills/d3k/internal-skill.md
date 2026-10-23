@@ -7,7 +7,7 @@ description: Run and debug a local web app with a managed browser and a shared s
 
 Own the project's dev server and monitored browser through a small background runtime. No global d3k installation is needed. Evidence stays in bounded memory; browser authentication stays in the project Chrome profile.
 
-Use `d3k-runtime` as `runtime` below when running from an installed dev3000 package, or `bunx --package dev3000 d3k-runtime` without a global install. Run from the **target project root**. For unreleased development use `node <dev3000-checkout>/skills/d3k/scripts/runtime.mjs` instead; that helper runs the checkout source without downloading a published version.
+Use `d3k-runtime` as `runtime` below when running from an installed dev3000 package, or `pnpm --package=dev3000 dlx d3k-runtime` without a global install. Run from the **target project root**. For unreleased development use `node <dev3000-checkout>/skills/d3k/scripts/runtime.mjs` instead; that helper runs the checkout source without downloading a published version.
 
 ## Prepare
 

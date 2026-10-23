@@ -9,9 +9,13 @@ const checkout = process.env.D3K_RUNTIME_ROOT || resolve(dirname(fileURLToPath(i
 const source = resolve(checkout, "src/runtime/cli.ts")
 const built = resolve(checkout, "dist/runtime/cli.js")
 const args = process.argv.slice(2)
-const command = existsSync(source) ? "bun" : existsSync(built) ? process.execPath : "bunx"
-const prefix = existsSync(source) ? [source] : existsSync(built) ? [built] : ["--package", "dev3000", "d3k-runtime"]
-const child = spawn(command, [...prefix, ...args], { stdio: "inherit" })
+const command = existsSync(source) ? "bun" : existsSync(built) ? process.execPath : "pnpm"
+const prefix = existsSync(source) ? [source] : existsSync(built) ? [built] : ["--package=dev3000", "dlx", "d3k-runtime"]
+const child = spawn(command, [...prefix, ...args], {
+  stdio: "inherit",
+  // dlx runs our tool independently of the target project's package manager.
+  env: command === "pnpm" ? { ...process.env, COREPACK_ENABLE_PROJECT_SPEC: "0" } : process.env
+})
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal))
 child.on("error", error => { console.error(error.message); process.exitCode = 1 })
 child.on("exit", (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0) })

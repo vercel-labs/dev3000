@@ -30,7 +30,7 @@ export default function HomePage() {
             Add the skill
           </h2>
           <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
-            <code>bunx skills add vercel-labs/dev3000 --skill d3k</code>
+            <code>pnpm dlx skills add vercel-labs/dev3000 --skill d3k</code>
           </pre>
           <p className="mt-6 text-muted-foreground">Then ask your coding agent:</p>
           <blockquote className="mt-3 border-l border-border pl-4 text-lg">

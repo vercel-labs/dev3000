@@ -5,12 +5,12 @@ d3k gives your coding agent a managed browser and a shared timeline of server ou
 Install the skill, then ask your agent to run the project, reproduce an issue, and inspect what happened:
 
 ```bash
-bunx skills add vercel-labs/dev3000 --skill d3k
+pnpm dlx skills add vercel-labs/dev3000 --skill d3k
 ```
 
 > Use d3k to run this project and help me debug the checkout flow.
 
-The skill owns a small background JavaScript runtime. No global d3k binary or terminal dashboard is required. Node.js 24+ and Bun are needed for the skill helper; Chrome must be available locally. The runtime can also run directly under Node.
+The skill owns a small background JavaScript runtime. No global d3k binary or terminal dashboard is required. Node.js 24+, pnpm, and Chrome are needed. The installed skill runs the JavaScript runtime under Node; Bun is only used for development in this repository.
 
 ## Try the source
 

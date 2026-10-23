@@ -7,7 +7,7 @@ description: Run and debug a local web app with a managed browser and a shared s
 
 Own the project's dev server and monitored browser through a small background runtime. No global d3k installation is needed. Evidence stays in bounded memory; browser authentication stays in the project Chrome profile.
 
-Use `node <skill-directory>/scripts/runtime.mjs` as `runtime` below, from the **target project root**. In a development checkout the helper runs the source with Bun; installed skills use the JavaScript package through Bun's package cache. To try unreleased source from another project, set `D3K_RUNTIME_ROOT` to the dev3000 checkout. Do not use a previously published package to test unreleased changes.
+Use `node <skill-directory>/scripts/runtime.mjs` as `runtime` below, from the **target project root**. In a development checkout the helper runs the source with Bun; installed skills use the JavaScript package through `pnpm dlx` (Node.js 24+ and pnpm required). To try unreleased source from another project, set `D3K_RUNTIME_ROOT` to the dev3000 checkout. Do not use a previously published package to test unreleased changes.
 
 ## Prepare
 
