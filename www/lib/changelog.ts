@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.184",
+    date: "2026-10-26",
+    type: "patch",
+    highlights: [
+      "Fix skill bootstrap workspace isolation and enable Chrome sandbox by default"
+    ]
+  },
+
+  {
     version: "0.0.183",
     date: "2026-10-23",
     type: "patch",
