@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.185",
+    date: "2026-10-26",
+    type: "patch",
+    highlights: [
+      "Require a workspace-aware runtime when bootstrapping the skill"
+    ]
+  },
+
+  {
     version: "0.0.184",
     date: "2026-10-26",
     type: "patch",

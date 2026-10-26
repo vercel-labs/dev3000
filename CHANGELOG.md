@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.185] - 2026-10-26
+
+**Patch Release**
+
+- Require a workspace-aware runtime when bootstrapping the skill
+
 ## [0.0.184] - 2026-10-26
 
 **Patch Release**
