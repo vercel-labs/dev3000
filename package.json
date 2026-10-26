@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.186-canary",
+  "version": "0.0.186",
   "description": "Agent-first local web debugging runtime with unified server and browser context",
   "type": "module",
   "main": "dist/index.js",

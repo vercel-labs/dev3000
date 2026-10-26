@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.186",
+    date: "2026-10-26",
+    type: "patch",
+    highlights: [
+      "Prefer readable Portless URLs and hash only on hostname conflicts"
+    ]
+  },
+
+  {
     version: "0.0.185",
     date: "2026-10-26",
     type: "patch",

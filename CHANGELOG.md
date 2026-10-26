@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.186] - 2026-10-26
+
+**Patch Release**
+
+- Prefer readable Portless URLs and hash only on hostname conflicts
+
 ## [0.0.185] - 2026-10-26
 
 **Patch Release**
