@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.185",
     date: "2026-10-26",
     type: "patch",
-    highlights: [
-      "Require a workspace-aware runtime when bootstrapping the skill"
-    ]
+    highlights: ["Require a workspace-aware runtime when bootstrapping the skill"]
   },
 
   {
