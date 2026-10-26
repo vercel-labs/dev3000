@@ -56,7 +56,7 @@ process.exit(${exitCode});
       expect(observed.acquisition).not.toBe(app)
       expect(observed.corepack).toBe("0")
       expect(observed.args).toEqual([
-        "--package=dev3000",
+        "--package=dev3000@>=0.0.184",
         "dlx",
         "d3k-runtime",
         "browser",

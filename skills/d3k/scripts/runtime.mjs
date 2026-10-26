@@ -11,7 +11,7 @@ const source = resolve(checkout, "src/runtime/cli.ts")
 const built = resolve(checkout, "dist/runtime/cli.js")
 const args = process.argv.slice(2)
 const command = existsSync(source) ? "bun" : existsSync(built) ? process.execPath : "pnpm"
-const prefix = existsSync(source) ? [source] : existsSync(built) ? [built] : ["--package=dev3000", "dlx", "d3k-runtime"]
+const prefix = existsSync(source) ? [source] : existsSync(built) ? [built] : ["--package=dev3000@>=0.0.184", "dlx", "d3k-runtime"]
 // pnpm reads workspace configuration even for dlx. Acquire the package outside
 // the app, then let the runtime restore the original project directory.
 const bootstrap = command === "pnpm" ? mkdtempSync(resolve(tmpdir(), "d3k-bootstrap-")) : undefined
