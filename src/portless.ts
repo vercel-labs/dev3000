@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process"
-import { accessSync, chmodSync, constants, existsSync } from "fs"
+import { accessSync, chmodSync, constants, existsSync, readFileSync } from "fs"
 import { homedir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
@@ -160,6 +160,39 @@ export function isCanonicalPortlessUrl(url: string): boolean {
     return !/^https?:\/\/(?:\[[^\]]+\]|[^/?#:]+):\d+(?:[/?#]|$)/i.test(url)
   } catch {
     return false
+  }
+}
+
+/**
+ * Whether `${name}.localhost` is already held in Portless's route table, by a
+ * live process or a static alias (pid 0). Portless refuses to register a held
+ * hostname, so callers use this to pick a different name up front. Stale routes
+ * left by exited processes do not count; Portless replaces them.
+ */
+export function isPortlessHostnameHeld(
+  name: string,
+  stateDir: string = process.env.PORTLESS_STATE_DIR || join(homedir(), ".portless")
+): boolean {
+  let routes: unknown
+  try {
+    routes = JSON.parse(readFileSync(join(stateDir, "routes.json"), "utf8"))
+  } catch {
+    return false
+  }
+  if (!Array.isArray(routes)) return false
+  const hostname = `${name}.localhost`
+  return routes.some((route) => route?.hostname === hostname && isLiveOrStaticRoutePid(route.pid))
+}
+
+function isLiveOrStaticRoutePid(pid: unknown): boolean {
+  if (pid === 0) return true
+  if (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid < 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    // EPERM: the process exists but belongs to another user.
+    return (error as NodeJS.ErrnoException).code === "EPERM"
   }
 }
 

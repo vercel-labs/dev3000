@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "fs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { getProjectDir, getProjectDisplayName, getProjectName } from "./project-name"
+import { getPortlessName, getProjectDir, getProjectDisplayName, getProjectName } from "./project-name"
 
 // Mock fs module
 vi.mock("fs", () => ({
@@ -145,5 +145,40 @@ describe("getProjectDir", () => {
     process.env.D3K_DATA_DIR = "/tmp/custom-d3k-data"
 
     expect(getProjectDir("/home/user/projects/app")).toBe("/tmp/custom-d3k-data")
+  })
+})
+
+describe("getPortlessName", () => {
+  const mockExistsSync = existsSync as unknown as ReturnType<typeof vi.fn>
+  const mockReadFileSync = readFileSync as unknown as ReturnType<typeof vi.fn>
+  const originalDataDir = process.env.D3K_DATA_DIR
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.D3K_DATA_DIR
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(JSON.stringify({ name: "my-app" }))
+  })
+
+  afterEach(() => {
+    if (originalDataDir === undefined) delete process.env.D3K_DATA_DIR
+    else process.env.D3K_DATA_DIR = originalDataDir
+  })
+
+  it("uses the readable name when the hostname is free", () => {
+    expect(getPortlessName("/home/user/my-app")).toBe("my-app")
+    expect(getPortlessName("/home/user/my-app", () => false)).toBe("my-app")
+  })
+
+  it("falls back to the path-hashed name only when the readable hostname is held", () => {
+    const held = new Set(["my-app"])
+    const name = getPortlessName("/home/user/my-app-worktree", (candidate) => held.has(candidate))
+    expect(name).toBe(getProjectName("/home/user/my-app-worktree"))
+    expect(name).toMatch(/^my-app-[a-f0-9]{6}$/)
+  })
+
+  it("keeps the data directory keyed by the hashed name regardless of hostname", () => {
+    expect(getPortlessName("/home/user/my-app")).toBe("my-app")
+    expect(getProjectDir("/home/user/my-app")).toMatch(/\/\.d3k\/my-app-[a-f0-9]{6}$/)
   })
 })

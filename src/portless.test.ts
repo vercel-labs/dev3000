@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest"
+import { mkdtempSync, rmSync, writeFileSync } from "fs"
+import { tmpdir } from "os"
+import { join } from "path"
+import { afterEach, describe, expect, it } from "vitest"
 import {
   buildPortlessServerCommand,
   isCanonicalPortlessUrl,
+  isPortlessHostnameHeld,
   type PortlessRuntime,
   parsePortlessProxyStatus,
   parsePortlessUrl
@@ -86,5 +90,42 @@ describe("Portless integration", () => {
     const command = buildPortlessServerCommand(runtime, "API_MODE=local bun run dev", { customCommand: true })
 
     expect(command).toContain("-- sh -c 'API_MODE=local bun run dev'")
+  })
+})
+
+describe("isPortlessHostnameHeld", () => {
+  const dirs: string[] = []
+  const stateDirWith = (routes: unknown) => {
+    const dir = mkdtempSync(join(tmpdir(), "portless-state-"))
+    dirs.push(dir)
+    writeFileSync(join(dir, "routes.json"), JSON.stringify(routes))
+    return dir
+  }
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("treats a route owned by a live process as held", () => {
+    const dir = stateDirWith([{ hostname: "my-app.localhost", port: 4000, pid: process.pid }])
+    expect(isPortlessHostnameHeld("my-app", dir)).toBe(true)
+  })
+
+  it("treats a static alias (pid 0) as held, since Portless refuses to replace it", () => {
+    const dir = stateDirWith([{ hostname: "my-app.localhost", port: 3000, pid: 0 }])
+    expect(isPortlessHostnameHeld("my-app", dir)).toBe(true)
+  })
+
+  it("ignores stale routes from exited processes and other hostnames", () => {
+    const dir = stateDirWith([
+      { hostname: "my-app.localhost", port: 4000, pid: 2 ** 30 },
+      { hostname: "other-app.localhost", port: 4001, pid: process.pid }
+    ])
+    expect(isPortlessHostnameHeld("my-app", dir)).toBe(false)
+  })
+
+  it("treats a missing or malformed route table as free", () => {
+    expect(isPortlessHostnameHeld("my-app", join(tmpdir(), "portless-state-does-not-exist"))).toBe(false)
+    expect(isPortlessHostnameHeld("my-app", stateDirWith({ not: "an array" }))).toBe(false)
   })
 })

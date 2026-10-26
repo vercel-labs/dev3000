@@ -120,6 +120,23 @@ export function getProjectDisplayName(cwd: string = process.cwd()): string {
 }
 
 /**
+ * Name to register with Portless, i.e. the app's https://<name>.localhost host.
+ *
+ * Prefers the readable name (`my-app` -> https://my-app.localhost). The
+ * path-hashed name is only used when that hostname is already held by another
+ * project, so two checkouts with the same name can still run side by side.
+ * The data directory (Chrome profile, logs) stays keyed by the hashed name
+ * either way, so switching hostnames never shares or loses a profile.
+ */
+export function getPortlessName(
+  cwd: string = process.cwd(),
+  isHostnameHeld: (name: string) => boolean = () => false
+): string {
+  const displayName = getProjectDisplayName(cwd)
+  return displayName && !isHostnameHeld(displayName) ? displayName : getProjectName(cwd)
+}
+
+/**
  * Get the d3k data directory for a project
  * All project-specific files are stored here: logs, chrome profile, skills, session info
  * Structure: ~/.d3k/{projectName}/

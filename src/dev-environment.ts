@@ -18,7 +18,12 @@ import { dirname, join, resolve, sep } from "path"
 import { fileURLToPath } from "url"
 import { stripVTControlCharacters } from "util"
 import { CDPMonitor } from "./cdp-monitor.js"
-import { buildPortlessServerCommand, type PortlessRuntime, preparePortlessRuntime } from "./portless.js"
+import {
+  buildPortlessServerCommand,
+  isPortlessHostnameHeld,
+  type PortlessRuntime,
+  preparePortlessRuntime
+} from "./portless.js"
 import { readRuntimeSession } from "./runtime/session.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
@@ -26,7 +31,7 @@ import { listAvailableSkills } from "./skills/index.js"
 import { DevTUI } from "./tui-interface.js"
 import { ensureD3kSkill } from "./utils/d3k-skill-installer.js"
 import { readProjectAgentName, rememberProjectAgentName } from "./utils/project-metadata.js"
-import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
+import { getPortlessName, getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import {
   getApplicablePackages,
   installSkillPackage,
@@ -994,7 +999,7 @@ export class DevEnvironment {
     })
 
     if (options.portless !== false) {
-      const portless = preparePortlessRuntime(getProjectDisplayName())
+      const portless = preparePortlessRuntime(getPortlessName(process.cwd(), isPortlessHostnameHeld))
       if (portless.success && portless.runtime) {
         this.portlessRuntime = portless.runtime
         this.publicAppUrl = portless.runtime.url

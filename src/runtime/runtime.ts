@@ -8,8 +8,13 @@ import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import { stripVTControlCharacters } from "node:util"
 import { CDPMonitor } from "../cdp-monitor.js"
-import { buildPortlessServerCommand, getPortlessProxyStatus, preparePortlessRuntime } from "../portless.js"
-import { getProjectName } from "../utils/project-name.js"
+import {
+  buildPortlessServerCommand,
+  getPortlessProxyStatus,
+  isPortlessHostnameHeld,
+  preparePortlessRuntime
+} from "../portless.js"
+import { getPortlessName } from "../utils/project-name.js"
 import { findCurrentSession } from "../utils/session.js"
 import { recordBrowserEvent } from "./browser-events.js"
 import { queryRuntime, type RuntimeSession, readRuntimeSession, runtimePaths } from "./session.js"
@@ -84,7 +89,7 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
   const status = getPortlessProxyStatus()
   if (!status.canonical || !status.serviceInstalled || status.setupRequired)
     throw new Error("Canonical Portless is required. Run d3k-runtime portless setup, then retry.")
-  const prepared = preparePortlessRuntime(getProjectName(cwd))
+  const prepared = preparePortlessRuntime(getPortlessName(cwd, isPortlessHostnameHeld))
   if (!prepared.runtime) throw new Error(prepared.error || "Portless is unavailable")
   const command = options.command || defaultCommand(cwd)
   const paths = runtimePaths(cwd)
