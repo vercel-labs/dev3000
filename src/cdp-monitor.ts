@@ -5,6 +5,11 @@ import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { WebSocket } from "ws"
 
+/** Sandbox exceptions must be explicit; headless mode alone never disables it. */
+export function getChromeSandboxFlags(env: NodeJS.ProcessEnv = process.env): string[] {
+  return env.D3K_CHROME_NO_SANDBOX === "1" ? ["--no-sandbox", "--disable-setuid-sandbox"] : []
+}
+
 export interface CDPEvent {
   method: string
   params: Record<string, unknown>
@@ -794,8 +799,13 @@ export class CDPMonitor {
           "--disable-sync",
           "--metrics-recording-only",
           "--disable-default-apps",
+          ...getChromeSandboxFlags(),
           ...CHROME_CRASH_RESTORE_SUPPRESSION_FLAGS
         ]
+
+        if (chromeArgs.includes("--no-sandbox")) {
+          this.logger("browser", "[CDP] WARNING: Chrome sandbox disabled explicitly by D3K_CHROME_NO_SANDBOX=1")
+        }
 
         if (shouldEnableReactDevTools && reactDevToolsExtensionPath) {
           chromeArgs.push(`--disable-extensions-except=${reactDevToolsExtensionPath}`)
@@ -812,9 +822,7 @@ export class CDPMonitor {
         if (this.headless) {
           // Use new headless mode (Chrome 112+) which has better compatibility
           chromeArgs.push("--headless=new")
-          // Additional flags needed for headless in serverless environments
-          chromeArgs.push("--no-sandbox")
-          chromeArgs.push("--disable-setuid-sandbox")
+          // Headless rendering does not require disabling Chrome's sandbox.
           chromeArgs.push("--disable-gpu")
           chromeArgs.push("--disable-dev-shm-usage")
           chromeArgs.push("--disable-background-timer-throttling")

@@ -6,6 +6,14 @@ import { getAgentBrowserBinaryPath } from "../utils/agent-browser.js"
 import { startRuntime } from "./runtime.js"
 import { queryRuntime, type RuntimeSession, readRuntimeSession } from "./session.js"
 
+// The skill helper acquires this package outside the target pnpm workspace.
+// Restore the app cwd before any command resolves project/session state, and
+// do not pass this bootstrap-only setting to the app or browser.
+if (process.env.D3K_BOOTSTRAP_CWD) {
+  process.chdir(process.env.D3K_BOOTSTRAP_CWD)
+  delete process.env.D3K_BOOTSTRAP_CWD
+}
+
 const print = (value: unknown) => console.log(JSON.stringify(value))
 const program = new Command()
   .name("d3k-runtime")

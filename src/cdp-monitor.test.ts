@@ -6,10 +6,20 @@ import {
   CDPMonitor,
   type CDPTargetInfo,
   CHROME_CRASH_RESTORE_SUPPRESSION_FLAGS,
+  getChromeSandboxFlags,
   getLoadingHtmlCandidates,
   resetChromeCrashRestoreState,
   selectCDPTarget
 } from "./cdp-monitor"
+
+describe("Chrome sandbox policy", () => {
+  it("keeps sandboxing enabled unless explicitly opted out", () => {
+    for (const value of [undefined, "", "0", "false", "true"]) {
+      expect(getChromeSandboxFlags({ D3K_CHROME_NO_SANDBOX: value })).toEqual([])
+    }
+    expect(getChromeSandboxFlags({ D3K_CHROME_NO_SANDBOX: "1" })).toEqual(["--no-sandbox", "--disable-setuid-sandbox"])
+  })
+})
 
 describe("selectCDPTarget", () => {
   it("prefers the current app target when Chrome exposes multiple pages", () => {

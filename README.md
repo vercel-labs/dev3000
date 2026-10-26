@@ -53,6 +53,8 @@ Only browser profile and session discovery data persist under `~/.d3k/<project>/
 
 The runtime detects the project's package manager and `dev` script. Use `start --command '<dev command>'` for other projects or custom servers. Use `--headless` for CI and `--servers-only` when browser monitoring is intentionally unwanted.
 
+Chrome's sandbox stays enabled in both headed and headless modes. If a constrained container cannot support Chrome sandboxing, explicitly set `D3K_CHROME_NO_SANDBOX=1` when starting the runtime. This disables browser isolation and emits a startup warning; use it only in an appropriately isolated environment. d3k does not retry without the sandbox automatically.
+
 The agent and user share the same monitored browser. Do not launch a second server or substitute another browser profile during a session. Leave the runtime running when handing the browser to the user for testing.
 
 ## Compatibility
