@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.186",
     date: "2026-10-26",
     type: "patch",
-    highlights: [
-      "Prefer readable Portless URLs and hash only on hostname conflicts"
-    ]
+    highlights: ["Prefer readable Portless URLs and hash only on hostname conflicts"]
   },
 
   {
