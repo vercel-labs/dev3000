@@ -1,9 +1,10 @@
 import { type ChildProcess, spawn } from "child_process"
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { WebSocket } from "ws"
+import { isolatedChromeInvocation } from "./runtime/chrome-isolation.js"
 
 /** Sandbox exceptions must be explicit; headless mode alone never disables it. */
 export function getChromeSandboxFlags(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -339,6 +340,8 @@ export class CDPMonitor {
   private appServerPort?: string // Port of the user's app server to monitor
   private initialAppUrl?: string // App URL that the loading page should hand off to
   private externalCdpBase?: string // Existing CDP HTTP endpoint to connect to instead of launching Chrome
+  private filesystemIsolation = false
+  private isolatedCertificatePin?: string
   private headless: boolean = false // Run Chrome in headless mode
   private framework?: "nextjs" | "svelte" | "other" // Framework hint from project detection
   private reactTrackingEnabled: boolean = false
@@ -561,6 +564,11 @@ export class CDPMonitor {
     return Array.from(this.chromePids)
   }
 
+  requireFilesystemIsolation(certificatePin: string): void {
+    this.isolatedCertificatePin = certificatePin
+    this.filesystemIsolation = true
+  }
+
   setOnWindowClosedCallback(callback: (() => void) | null): void {
     this.onWindowClosedCallback = callback
   }
@@ -594,7 +602,8 @@ export class CDPMonitor {
 
   private createLoadingPage(targetUrl?: string): string {
     // Use a unique temp directory per launch to avoid stale file:// cache artifacts.
-    const loadingDir = mkdtempSync(join(tmpdir(), "dev3000-loading-"))
+    if (this.filesystemIsolation) mkdirSync(this.profileDir, { recursive: true, mode: 0o700 })
+    const loadingDir = mkdtempSync(join(this.filesystemIsolation ? this.profileDir : tmpdir(), "dev3000-loading-"))
     const loadingPath = join(loadingDir, "loading.html")
 
     // Read the loading HTML from a runtime-valid location.
@@ -824,7 +833,11 @@ export class CDPMonitor {
         // Add initial page
         chromeArgs.push(this.createLoadingPage(this.initialAppUrl))
 
-        this.browser = spawn(chromePath, chromeArgs, {
+        const invocation = this.filesystemIsolation
+          ? isolatedChromeInvocation(chromePath, chromeArgs, this.profileDir, this.isolatedCertificatePin)
+          : { binary: chromePath, args: chromeArgs, env: process.env }
+        this.browser = spawn(invocation.binary, invocation.args, {
+          env: invocation.env,
           stdio: "pipe",
           detached: true // Separate process group so Chrome doesn't receive SIGINT on Ctrl+C
         })

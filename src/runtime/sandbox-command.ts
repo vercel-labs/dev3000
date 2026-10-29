@@ -20,13 +20,13 @@ export function addSandboxProjectOptions(command: Command): Command {
     .option("--attach <name>", "Use an existing sandbox with its repository already provisioned")
     .option("--hostname <name>", "Stable local app name, e.g. songbook for songbook.d3k.localhost")
     .option("--region <region>", "Vercel Sandbox region")
-    .option("--timeout <minutes>", "Compute timeout for a new sandbox", "30")
+    .option("--timeout <minutes>", "Compute timeout for the sandbox", "30")
     .option(
       "--install-command <command>",
       "Remote dependency install command (otherwise project setting or bun install)"
     )
     .option("--no-shell", "Keep the companion running without opening an interactive remote shell")
-    .option("--no-fx", "Skip fx installation and temporary team AI Gateway credentials")
+    .option("--no-fx", "Skip fx installation")
 }
 
 export function resolveSandboxOptions(options: SandboxOptions): SandboxOptions {

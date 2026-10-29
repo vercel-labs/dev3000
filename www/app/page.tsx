@@ -64,15 +64,15 @@ export default function HomePage() {
           <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
             <code>
               {
-                "vercel login\nd3k --project my-team/my-project --harness fx\n# Browser: https://my-project.d3k.localhost"
+                "vercel login\nbunx agent-browser install\nd3k --project my-team/my-project --harness fx\n# Browser: https://my-project.d3k.localhost"
               }
             </code>
           </pre>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Sandbox mode is experimental and requires Vercel CLI, Sandbox access, Bun, Node.js 24+, Chrome, and local
-            Portless setup. New sandboxes clone public repositories. Use <code>--attach my-dev</code> for an existing
-            sandbox containing a private checkout. Sandbox fx is configured for your team’s AI Gateway; model usage is
-            billed to that team.
+            Sandbox mode is experimental and requires macOS, Vercel CLI, Sandbox access, Bun, Node.js 24+, Chrome, and
+            local Portless setup. New sandboxes clone public repositories. Use <code>--attach my-dev</code> for an
+            existing sandbox containing a private checkout. Chrome is confined to its dedicated profile and system
+            files. Authenticate your harness inside the sandbox; d3k does not provision or forward Gateway keys.
           </p>
         </section>
         <section className="mt-20" aria-label="Resume a sandbox session">

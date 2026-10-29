@@ -71,14 +71,17 @@ Run this from any directory; the project repository never needs to exist on your
 
 ```bash
 vercel login
+bunx agent-browser install
 d3k --project my-team/my-project --name my-dev
 # The terminal enters the remote project directory. Then:
 fx
 ```
 
-This experimental command needs a recent Vercel CLI (tested with 59.26.0), Bun, Node.js 24+, local Chrome, and access to Vercel Sandbox. Run it from any directory: no local project checkout is needed. It uses your Vercel login to resolve the linked GitHub repository, project root, Development environment, and install/dev commands. It clones and installs the project remotely, uploads the installed d3k distribution, launches the dev server, opens a dedicated local Chrome, and enters the sandbox shell. `d3k sandbox --project my-project --scope my-team` is equivalent.
+This experimental command needs a recent Vercel CLI (tested with 59.26.0), Bun, Node.js 24+, macOS, Chrome for Testing (`bunx agent-browser install`), and access to Vercel Sandbox. Run it from any directory: no local project checkout is needed. It uses your Vercel login to resolve the linked GitHub repository, project root, Development environment, and install/dev commands. It clones and installs the project remotely, uploads the installed d3k distribution, launches the dev server, opens a dedicated local Chrome, and enters the sandbox shell. `d3k sandbox --project my-project --scope my-team` is equivalent.
 
-The shell starts in the Vercel project's root, ready for `fx`. d3k uses the image's fx binary or installs it from fx.sh when absent, then creates an expiring AI Gateway-only key for the selected team. Only fx receives that credential; it is stored outside the checkout with private permissions, revoked on exit, and expires after `--timeout` minutes if cleanup cannot run. Model usage is billed to that team's Gateway and follows its restrictions. The launcher selects this credential even if fx previously used another account. Use `--no-fx` to skip installation and Gateway setup and run your own agent instead. App environment variables are supplied to the dependency install and dev runtime; the interactive agent shell does not automatically inherit them.
+The shell starts in the Vercel project's root. d3k uses the image's fx binary or installs it from fx.sh when absent. Authenticate your harness inside the sandbox before use; d3k does not provision Gateway keys or forward laptop harness credentials. Project processes and harnesses share the sandbox identity, so credentials you manually configure there are accessible to project code. Use `--no-fx` to skip installation. App environment variables are supplied to dependency installation and the dev runtime; the interactive harness shell does not automatically inherit them.
+
+Sandbox mode currently requires macOS. Chrome runs under an OS filesystem policy that permits its application bundle, system libraries, and dedicated d3k profile and temporary files. Other laptop files are denied, including CDP navigation and uploads. Chrome's inner sandbox cannot nest inside this macOS policy; the outer policy applies to the browser and all its children. Cookies use the dedicated profile’s local storage instead of the laptop keychain. A sandbox session can read and modify its own browser profile and authenticated web sessions. Use sandbox mode with projects you trust with that session's browser access. Other operating systems fail closed until equivalent confinement is available.
 
 The launcher supplies project-scoped CLI authentication to the interactive connection without forwarding that management token into the VM. Inside the remote project directory, use the existing runtime:
 
@@ -113,7 +116,7 @@ d3k --project my-team/my-project --harness fx
 d3k --project my-team/my-project --attach my-dev --harness claude
 ```
 
-`--harness` accepts `fx`, `codex`, or `claude`. It requires an interactive terminal and cannot be combined with `--no-shell` or `--servers-only`. Harnesses must be installed and authenticated, except for d3k's sandbox fx setup. Locally, harnesses use your local credentials; sandbox fx uses the temporary team AI Gateway key unless `--no-fx` is selected.
+`--harness` accepts `fx`, `codex`, or `claude`. It requires an interactive terminal and cannot be combined with `--no-shell` or `--servers-only`. Harnesses must be installed and authenticated, with optional fx installation in sandbox mode. Locally, harnesses use your local credentials; remote harnesses require authentication inside the sandbox.
 
 Codex and Claude receive a startup prompt to read the bundled d3k skill and reuse the running browser and timeline. fx receives temporary skill context through `--add-dir`; its interactive CLI has no startup prompt. Project instruction files are left intact. The flag accepts fixed harness names, not commands, paths, or extra arguments. Exiting the harness closes a session started by that invocation.
 

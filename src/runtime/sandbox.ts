@@ -17,16 +17,10 @@ import {
   removePortlessAlias
 } from "../portless.js"
 import { connectCompanion } from "./bridge.js"
+import { portlessCertificatePin, sandboxChromePath } from "./chrome-isolation.js"
 import { type Harness, harnessInvocation, harnessSkill } from "./harness.js"
 import { startLocalProxy } from "./local-proxy.js"
-import {
-  configureSandboxFx,
-  type GatewayCredential,
-  prepareSandboxFx,
-  SANDBOX_AGENT_BIN,
-  SANDBOX_AGENT_DIRECTORY,
-  SANDBOX_TOOLS
-} from "./sandbox-agent.js"
+import { prepareSandboxFx, SANDBOX_AGENT_BIN, SANDBOX_AGENT_DIRECTORY, SANDBOX_TOOLS } from "./sandbox-agent.js"
 import { listSandboxSessions, readSandboxSession, type SandboxSession, saveSandboxSession } from "./sandbox-sessions.js"
 
 const REMOTE_TOOLS = SANDBOX_TOOLS
@@ -133,6 +127,7 @@ async function freePort(): Promise<number> {
 }
 
 export async function launchSandbox(options: SandboxOptions): Promise<void> {
+  const isolatedBrowserPath = sandboxChromePath()
   const scope = options.scope ? ["--scope", options.scope] : []
   const log = (message: string) => console.error(`[d3k sandbox] ${message}`)
   const temporary = mkdtempSync(join(tmpdir(), "d3k-sandbox-"))
@@ -148,7 +143,6 @@ export async function launchSandbox(options: SandboxOptions): Promise<void> {
   let closing = false
   let signalReceived = false
   let remoteWorkdir = "/vercel/sandbox"
-  let gateway: { id: string; teamId: string } | undefined
   let finish: () => void = () => {}
   const shellAbort = new AbortController()
   const ended = new Promise<void>((resolveEnd) => {
@@ -341,6 +335,12 @@ export async function launchSandbox(options: SandboxOptions): Promise<void> {
     delete appEnv.VERCEL_OIDC_TOKEN
     delete appEnv.VERCEL_TOKEN
     delete appEnv.VERCEL_AUTH_TOKEN
+    // Remove credentials from pre-hardening sessions before any repository code runs.
+    const legacyCleanup = await sandbox.runCommand({
+      cmd: "rm",
+      args: ["-f", `${SANDBOX_AGENT_DIRECTORY}/gateway.json`, `${SANDBOX_AGENT_BIN}/fx`]
+    })
+    if (legacyCleanup.exitCode !== 0) throw new Error("Could not remove legacy sandbox harness credentials")
     const setup = options.installCommand || project.installCommand || "bun install"
     log(`Installing project dependencies: ${setup}`)
     const installed = await sandbox.runCommand({
@@ -353,32 +353,9 @@ export async function launchSandbox(options: SandboxOptions): Promise<void> {
     if (installed.exitCode !== 0)
       throw new Error(`Project dependency installation failed: ${(await installed.stderr()).slice(-4000)}`)
     if (signalReceived) return
-    if (options.fx !== false) {
-      log("Preparing fx with a temporary AI Gateway key for the selected team")
-      const binary = await prepareSandboxFx(sandbox)
-      const expiresAt = Date.now() + Number(options.timeout || 30) * 60000
-      const credential = JSON.parse(
-        await run(
-          "vercel",
-          ["api", "/api-keys", "--method", "POST", "--scope", project.accountId, "--input", "-", "--raw"],
-          {
-            cwd: temporary,
-            input: JSON.stringify({ purpose: "ai-gateway", name: `d3k ${project.name} ${sandbox.name}`, expiresAt })
-          }
-        )
-      ) as GatewayCredential
-      // Retain the ID immediately so even configuration failures revoke the new key.
-      if (credential.apiKey?.id) gateway = { id: credential.apiKey.id, teamId: project.accountId }
-      if (
-        !gateway ||
-        !credential.apiKeyString ||
-        credential.apiKey.teamId !== project.accountId ||
-        credential.apiKey.purpose !== "ai-gateway" ||
-        credential.apiKey.expiresAt !== expiresAt
-      )
-        throw new Error("Vercel did not return a correctly scoped, expiring Gateway key")
-      await configureSandboxFx(sandbox, binary, workdir, credential)
-      log(`fx is ready for ${options.scope || project.accountId}'s AI Gateway; type fx in the shell`)
+    if (options.fx !== false && options.shell !== false) {
+      log("Preparing fx; authenticate the harness in the sandbox before use")
+      await prepareSandboxFx(sandbox)
     }
     if (signalReceived) return
     const upstreamUrl = sandbox.domain(APP_PORT)
@@ -432,13 +409,14 @@ export async function launchSandbox(options: SandboxOptions): Promise<void> {
         if (message.startsWith("[CDP]")) log(message)
       },
       false,
-      undefined,
+      isolatedBrowserPath,
       undefined,
       undefined,
       60000,
       chromePort,
       options.headless
     )
+    browser.requireFilesystemIsolation(await portlessCertificatePin(appUrl))
     browser.setOnWindowClosedCallback(onSignal)
     await browser.start()
     companion = connectCompanion({
@@ -522,21 +500,9 @@ export async function launchSandbox(options: SandboxOptions): Promise<void> {
       }
       await localProxy?.close()
       await browser?.shutdown().catch(() => {})
-      if (gateway) {
-        await run("vercel", ["ai-gateway", "api-keys", "remove", gateway.id, "--scope", gateway.teamId, "--yes"], {
-          cwd: temporary
-        }).catch(() => log("Could not revoke the session Gateway key; it will expire at its original deadline"))
-      }
       if (sandbox) {
         if (options.harness)
           await sandbox.runCommand({ cmd: "rm", args: ["-rf", `${REMOTE_TOOLS}/harness-context`] }).catch(() => {})
-        if (gateway)
-          await sandbox
-            .runCommand({
-              cmd: "rm",
-              args: ["-f", `${SANDBOX_AGENT_DIRECTORY}/gateway.json`, `${SANDBOX_AGENT_BIN}/fx`]
-            })
-            .catch(() => {})
         if (remoteStarted)
           await sandbox
             .runCommand({ cmd: "node", args: [REMOTE_ENTRY, "stop"], cwd: remoteWorkdir, timeoutMs: 10000 })
