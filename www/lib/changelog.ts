@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.189",
     date: "2026-10-29",
     type: "patch",
-    highlights: [
-      "Remove startup banners from isolated sandbox Chrome"
-    ]
+    highlights: ["Remove startup banners from isolated sandbox Chrome"]
   },
 
   {
