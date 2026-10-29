@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.188",
     date: "2026-10-29",
     type: "patch",
-    highlights: [
-      "Install isolated Chrome automatically on first sandbox run"
-    ]
+    highlights: ["Install isolated Chrome automatically on first sandbox run"]
   },
 
   {
