@@ -42,7 +42,8 @@ export function isolatedChromeInvocation(binary: string, args: string[], profile
 (allow default)
 (deny file-read-data ${except(readable)})
 (deny file-write* ${except([directory, "/dev"])})
-(deny appleevent-send)`
+(deny appleevent-send)
+(deny mach-lookup (global-name "com.apple.pasteboard.1") (global-name "com.apple.pasteboard") (global-name "com.apple.pbs"))`
   // Seatbelt cannot be nested. The outer policy confines all Chrome processes, rather than renderers alone.
   const chromeArgs = args.filter((arg) => arg !== "--no-sandbox" && arg !== "--disable-setuid-sandbox")
   chromeArgs.push(
