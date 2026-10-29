@@ -48,7 +48,7 @@ export default function HomePage() {
             starts the server and browser before handing the terminal to the harness with d3k skill guidance.
           </p>
           <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
-            <code>{"bun add --global dev3000\nd3k portless setup\nd3k start --harness codex"}</code>
+            <code>{"pnpm add --global dev3000\nd3k portless setup\nd3k start --harness codex"}</code>
           </pre>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
             Choose <code>fx</code>, <code>codex</code>, or <code>claude</code> with <code>--harness</code>. Use an
@@ -64,7 +64,7 @@ export default function HomePage() {
           <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
             <code>
               {
-                "vercel login\nbunx agent-browser install\nd3k --project my-team/my-project --harness fx\n# Browser: https://my-project.d3k.localhost"
+                "vercel login\npnpm dlx agent-browser install\nd3k --project my-team/my-project --harness fx\n# Browser: https://my-project.d3k.localhost"
               }
             </code>
           </pre>
