@@ -50,6 +50,10 @@ afterEach(async () => {
 
 async function fixture() {
   const app = httpServer((incoming, response) => {
+    if (incoming.url === "/account/logout") {
+      response.writeHead(302, { location: "login?q=1" }).end()
+      return
+    }
     if (incoming.url === "/redirect") {
       response
         .writeHead(302, {
@@ -176,6 +180,7 @@ describe("stable local sandbox proxy", () => {
     expect(response.headers["set-cookie"]).toEqual(["session=proof; Secure; HttpOnly; SameSite=Lax"])
     expect((await http(local.port, "/oauth")).headers.location).toBe("https://accounts.example/login")
     expect((await http(local.port, "/bad-redirect")).headers.location).toBe("http://[")
+    expect((await http(local.port, "/account/logout")).headers.location).toBe(`${origin}/account/login?q=1`)
   })
 
   it("rejects foreign hosts, absolute request targets and unpaired public requests", async () => {

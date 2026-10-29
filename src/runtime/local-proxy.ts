@@ -39,7 +39,7 @@ export async function startLocalProxy(options: {
         const output = { ...result.headers }
         if (output.location) {
           try {
-            const location = new URL(output.location, target)
+            const location = new URL(output.location, new URL(incoming.url || "/", target))
             if (location.origin === target.origin)
               output.location = `${origin.origin}${location.pathname}${location.search}${location.hash}`
           } catch {

@@ -193,6 +193,7 @@ export async function launchSandbox(options: SandboxOptions): Promise<void> {
       // Read configured routes before resuming: resume responses may also contain reserved system ports.
       // The first command below resumes compute automatically after user ports have been configured.
       sandbox = await Sandbox.get({ ...credentials, name: options.attach })
+      await sandbox.update({ timeout: Number(options.timeout || 30) * 60000 })
       const ports = sandbox.routes.map((route) => route.port)
       if (!ports.includes(APP_PORT) || !ports.includes(BRIDGE_PORT)) {
         originalPorts = ports
