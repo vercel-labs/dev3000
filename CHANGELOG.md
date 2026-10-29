@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.187] - 2026-10-29
+
+**Patch Release**
+
+- Use pnpm in homepage install examples
+- Override vulnerable transitive Zod with patched version
+- Block host pasteboard access from sandbox Chrome
+- Align bundled sandbox skill with confined browser and harness authentication
+- Confine sandbox Chrome filesystem access and remove Gateway key provisioning
+
 ## [0.0.186] - 2026-10-26
 
 **Patch Release**

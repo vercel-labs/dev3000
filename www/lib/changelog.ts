@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.187",
+    date: "2026-10-29",
+    type: "patch",
+    highlights: [
+      "Use pnpm in homepage install examples",
+      "Override vulnerable transitive Zod with patched version",
+      "Block host pasteboard access from sandbox Chrome",
+      "Align bundled sandbox skill with confined browser and harness authentication",
+      "Confine sandbox Chrome filesystem access and remove Gateway key provisioning"
+    ]
+  },
+
+  {
     version: "0.0.186",
     date: "2026-10-26",
     type: "patch",
