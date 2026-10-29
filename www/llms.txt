@@ -1,125 +1,42 @@
-# dev3000
+# d3k
 
-> AI-powered development tools with comprehensive browser monitoring and skill-based agent guidance
+> A managed browser and a bounded server/browser event timeline for coding agents.
 
-## Overview
+d3k is written in TypeScript and runs under Node.js 24+. Install its skill with
+`pnpm dlx skills add vercel-labs/dev3000 --skill d3k`, then ask your agent to run
+and debug your project. No global CLI installation is required for skill use.
 
-dev3000 is a TypeScript package that gives AI assistants deep visibility into local development workflows. It captures unified logs from servers, browsers, and user interactions, making debugging and development assistance dramatically more effective.
+The same runtime backs d3k, dev3000, and d3k-runtime. Commands:
+- start: own the dev server and project browser in a retained process
+- status: report readiness, session ID, and event cursor
+- events: read events after a cursor, with source/level filters
+- logs and errors: recent views over the live event timeline
+- browser: drive the exact monitored browser via agent-browser and CDP
+- stop: close the app and browser
+- portless status/setup: prepare canonical port-free local HTTPS
+- sandbox: run a Vercel project remotely with a local Chrome browser
+- upgrade: explicitly update the global package with Bun
 
-## Key Features
+Local and sandbox startup require canonical Portless HTTPS on the laptop. Local apps use https://my-app.localhost; sandbox apps use https://<project>.d3k.localhost (override with --hostname). The loopback companion streams app traffic to a session-token-protected sandbox endpoint.
+Use start --command for custom dev commands; timeout flags use milliseconds.
+The browser profile persists authentication. Events remain in bounded memory
+(5,000 events or 8 MiB) and disappear on exit. Cursor responses report resets
+and dropped evidence. Request bodies and headers are omitted; URL query values
+are redacted. Server and console text may still contain application secrets.
 
-- **Unified Logging**: Consolidates server output, browser console logs, network requests, user interactions, and automatic screenshots into a single timeline
-- **Skill Integration**: Ships a built-in d3k skill and supports optional skill packs installed via the skills CLI
-- **Dual Monitoring**: Choose between Playwright automation or headless Chrome monitoring
-- **Real-time Analysis**: Live log parsing and search capabilities with timestamp-based debugging workflows
-- **Screenshot Automation**: Captures screenshots on errors, navigation, and interactions for visual context
+Capture screenshots explicitly with browser screenshot <absolute-path>.
+There is no terminal dashboard, automatic screenshot/screencast capture,
+file-backed logging, tmux agent launcher, skill installer, or automatic upgrade.
 
-## Architecture
+Sandbox mode requires Vercel CLI login, Bun, and local Chrome. The linked repo,
+Development env, dev server, and agent live remotely; no local checkout is needed.
+A persistent authenticated outbound WSS bridge carries CDP between the local
+browser and sandbox. Public repo creation is supported; private repos require
+an existing sandbox containing the checkout and --attach.
+The public sandbox app endpoint requires a session token supplied by the loopback companion. Application authentication remains the app's responsibility.
 
-### Core Components
+Source: https://github.com/vercel-labs/dev3000
 
-1. **CLI Tool (`src/cli.ts`)**
-   - Main entry point with Commander.js interface
-   - Commands: `start` (dev environment), `setup` (project setup)
-   - Default command is `start` if no subcommand provided
+Sandbox resume: `d3k --resume` lists locally saved session IDs, projects, sandbox names, branches, URLs, and last-used times. `d3k --resume <id>` restores that sandbox checkout and hostname, refreshes Development env and dependencies, restarts the dev runtime, and pairs the retained browser profile using fresh bridge/proxy tokens. No repository checkout is needed on the laptop. Ctrl-C closes the browser and prints the resume command to stdout. Saved entries contain discovery metadata, not credentials or past terminal output; remote availability is checked on resume. Optional `--command`, `--hostname`, `--timeout`, `--no-shell`, `--no-fx`, and `--headless` override launch settings. Sandboxes originally created by d3k stop compute again on resumed exit; externally attached sandboxes remain running.
 
-2. **Development Environment (`src/dev-environment.ts`)**
-   - Orchestrates dev server + browser monitoring
-   - Works with any web framework (Next.js, Vite, React, etc.)
-   - Port management (defaults: 3000 for app)
-   - Chrome profile management and unified logging
-
-3. **Browser Monitoring (`src/cdp-monitor.ts`)**
-   - Chrome DevTools Protocol integration
-   - Captures console logs, network requests, page errors, navigation
-   - User interaction tracking (clicks, scrolls, typing)
-   - Automatic screenshot capture on events
-
-4. **Skills (`src/skills/`)**
-   - Built-in d3k skill for debugging workflows
-   - Optional skill packs installed via `npx skills`
-
-### Log Format
-
-All logs use unified timestamps with source prefixes:
-```
-[2025-01-15T12:54:03.033Z] [SERVER] Ready on http://localhost:3000
-[2025-01-15T12:54:03.435Z] [BROWSER] [CONSOLE LOG] App initialized
-[2025-01-15T12:54:03.500Z] [BROWSER] [NETWORK REQUEST] GET http://localhost:3000/api/data
-[2025-01-15T12:54:03.650Z] [BROWSER] [INTERACTION] CLICK at 150,200 on button.submit
-[2025-01-15T12:54:03.700Z] [BROWSER] [SCREENSHOT] interaction-click.png
-```
-
-## Installation & Usage
-
-### Global Installation
-```bash
-bun install -g dev3000
-```
-
-### Project Setup
-```bash
-# Initialize in Next.js project
-dev3000 setup
-
-# Start monitoring (default mode with Playwright)
-dev3000
-# or explicitly:
-dev3000 start
-
-# Custom configuration
-dev3000 --port 5173 --profile-dir ./my-profile
-```
-
-## Technical Stack
-
-- **Runtime**: Node.js 18+, TypeScript 5+
-- **Package Manager**: Bun (required)
-- **Browser Automation**: Chrome DevTools Protocol, Playwright
-- **CLI Framework**: Commander.js
-- **Testing**: Vitest
-- **Linting**: Biome
-
-## File Structure
-
-```
-dev3000/
-├── src/                    # Core TypeScript source
-│   ├── cli.ts             # CLI entry point
-│   ├── dev-environment.ts # Development orchestration
-│   ├── cdp-monitor.ts     # Chrome DevTools Protocol integration
-│   └── setup.ts          # Project setup utilities
-├── scripts/              # Build and release scripts
-└── www/                  # Marketing website (Next.js)
-```
-
-## Integration with AI Assistants
-
-dev3000 is specifically designed to enhance AI-assisted development:
-
-1. **Comprehensive Context**: AI assistants get full visibility into user interactions, server responses, and browser state
-2. **Temporal Debugging**: Timestamp-based log analysis lets AI correlate user actions with system responses
-3. **Visual Context**: Screenshots provide visual debugging context that pure logs cannot
-4. **Safe Automation**: Browser automation tools let AI test fixes and reproduce issues safely
-5. **Real-time Analysis**: Live log analysis enables immediate debugging assistance
-
-## Use Cases
-
-- **Debugging Next.js applications** with AI assistance
-- **Correlating user interactions** with server/browser events
-- **Visual debugging** with automatic screenshots
-- **Session replay analysis** for user experience issues
-- **Performance monitoring** with network request tracking
-- **Error tracking** with full context capture
-- **Development workflow optimization** through AI insights
-
-## Target Audience
-
-- Next.js developers using AI assistants (Claude, ChatGPT, etc.)
-- Development teams wanting better debugging visibility
-- AI-powered development tool integrators
-- Anyone building complex web applications needing comprehensive monitoring
-
----
-
-For more information, visit: https://github.com/vercel-labs/dev3000
+Optional --harness fx|codex|claude launches a supported coding harness after readiness, locally with start or remotely with --project. It requires an interactive terminal and supplies d3k skill context; arbitrary commands are rejected.

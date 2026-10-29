@@ -318,14 +318,9 @@ export function selectCDPTarget(
 
 export class CDPMonitor {
   private eventObserver?: (event: CDPEvent) => void
-  private automaticScreenshots = true
 
   setEventObserver(observer: (event: CDPEvent) => void): void {
     this.eventObserver = observer
-  }
-
-  setAutomaticScreenshots(enabled: boolean): void {
-    this.automaticScreenshots = enabled
   }
 
   private browser: ChildProcess | null = null
@@ -333,18 +328,12 @@ export class CDPMonitor {
   private debugPort: number = 9222
   private eventHandlers = new Map<string, (event: CDPEvent) => void>()
   private profileDir: string
-  private screenshotDir: string
   private logger: (source: string, message: string) => void
   private debug: boolean = false
   private browserPath?: string
   private isShuttingDown = false
-  private pendingRequests = 0
-  private networkIdleTimer: NodeJS.Timeout | null = null
-  private pluginReactScan: boolean = false
+  private reconnecting = false
   private cdpUrl: string | null = null
-  private lastScreenshotTime: number = 0
-  private minScreenshotInterval: number = 1000 // Minimum 1 second between screenshots
-  private navigationInProgress: boolean = false // Track if a navigation event recently occurred
   private chromePids: Set<number> = new Set() // Track all Chrome PIDs for this instance
   private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
   private appServerPort?: string // Port of the user's app server to monitor
@@ -359,11 +348,9 @@ export class CDPMonitor {
 
   constructor(
     profileDir: string,
-    screenshotDir: string,
     logger: (source: string, message: string) => void,
     debug: boolean = false,
     browserPath?: string,
-    pluginReactScan: boolean = false,
     appServerPort?: string,
     initialAppUrl?: string,
     navigationTimeoutMs: number = DEFAULT_NAVIGATION_TIMEOUT_MS,
@@ -373,12 +360,10 @@ export class CDPMonitor {
     externalCdpBase?: string
   ) {
     this.profileDir = profileDir
-    this.screenshotDir = screenshotDir
     this.appServerPort = appServerPort
     this.logger = logger
     this.debug = debug
     this.browserPath = browserPath
-    this.pluginReactScan = pluginReactScan
     this.initialAppUrl = initialAppUrl
     this.navigationTimeoutMs = navigationTimeoutMs
     this.headless = headless
@@ -675,12 +660,9 @@ export class CDPMonitor {
 
           // Log context for crash correlation
           this.logger("browser", "[CRASH] Chrome crashed - check recent server/browser logs for correlation")
-
-          // Take screenshot if still connected (for crash context)
-          if (this.connection && this.connection.ws.readyState === 1) {
-            this.takeScreenshot("crash")
-          }
         }
+        this.prepareShutdown()
+        this.onWindowClosedCallback?.()
       }
     })
 
@@ -773,7 +755,12 @@ export class CDPMonitor {
 
       let attemptIndex = 0
 
+      let launchComplete = false
       const tryNextChrome = () => {
+        if (launchComplete || this.isShuttingDown) {
+          if (!launchComplete) reject(new Error("Browser session is ending"))
+          return
+        }
         if (attemptIndex >= chromeCommands.length) {
           const errorMsg = `Failed to launch Chrome: all ${chromeCommands.length} browser paths exhausted`
           this.logger("browser", `[CDP] ${errorMsg}`)
@@ -882,6 +869,10 @@ export class CDPMonitor {
         const checkChromeReady = async (attempts = 0): Promise<void> => {
           const maxAttempts = 30 // 30 attempts = 15 seconds max
 
+          if (launchComplete || this.isShuttingDown) {
+            if (!launchComplete) reject(new Error("Browser session is ending"))
+            return
+          }
           if (processExited) {
             return
           }
@@ -912,6 +903,11 @@ export class CDPMonitor {
               // Discover all Chrome PIDs for this instance
               await this.discoverChromePids()
 
+              if (this.isShuttingDown) {
+                reject(new Error("Browser session is ending"))
+                return
+              }
+              launchComplete = true
               // Set up runtime crash monitoring after successful launch
               this.setupRuntimeCrashMonitoring()
 
@@ -942,10 +938,11 @@ export class CDPMonitor {
     const maxRetries = 5
 
     while (retryCount < maxRetries) {
+      if (this.isShuttingDown) throw new Error("Browser session is ending")
       try {
         // Get the WebSocket URL from Chrome's debug endpoint
         const targetsResponse = await fetch(`${cdpBase}/json`)
-        let targets = (await targetsResponse.json()) as CDPTargetInfo[]
+        const targets = (await targetsResponse.json()) as CDPTargetInfo[]
 
         this.debugLog(
           `Found ${targets.length} targets: ${JSON.stringify(
@@ -953,18 +950,12 @@ export class CDPMonitor {
           )}`
         )
 
-        if (targets.length === 0) {
-          this.debugLog("No debuggable targets found; creating a blank page target")
-          const newTargetResponse = await fetch(`${cdpBase}/json/new?about:blank`, {
-            method: "PUT"
-          })
-          if (newTargetResponse.ok) {
-            const createdTarget = (await newTargetResponse.json()) as CDPTargetInfo
-            targets = [createdTarget]
-            this.debugLog(`Created page target: ${createdTarget.id || "unknown"} - ${createdTarget.url || ""}`)
-          } else {
-            this.debugLog(`Failed to create page target: HTTP ${newTargetResponse.status}`)
-          }
+        if (this.isShuttingDown) throw new Error("Browser session is ending")
+        if (!targets.some((target) => target.type === "page")) {
+          // A closed final window is a session end, never a request to create a replacement tab.
+          this.prepareShutdown()
+          this.onWindowClosedCallback?.()
+          throw new Error("Browser has no open targets; session ended")
         }
 
         const pageTarget = selectCDPTarget(targets, {
@@ -990,6 +981,11 @@ export class CDPMonitor {
 
           ws.on("open", () => {
             this.debugLog("WebSocket connection opened successfully")
+            if (this.isShuttingDown) {
+              ws.close()
+              reject(new Error("Browser session is ending"))
+              return
+            }
             this.connection = {
               ws,
               sessionId: null,
@@ -1069,6 +1065,7 @@ export class CDPMonitor {
           }, 5000)
         })
       } catch (error) {
+        if (this.isShuttingDown) throw error
         retryCount++
         this.debugLog(`CDP connection attempt ${retryCount} failed: ${error}`)
 
@@ -1084,30 +1081,41 @@ export class CDPMonitor {
     }
   }
 
+  /** A returning companion can retry after the previous finite recovery attempt was exhausted. */
+  async recoverExternalConnection(): Promise<void> {
+    if (this.externalCdpBase && !this.getCdpUrl()) await this.attemptReconnect()
+  }
+
   private async attemptReconnect(): Promise<void> {
-    this.debugLog("Starting CDP reconnection attempt")
-    this.logger("browser", "[CDP] Starting reconnection process...")
-
-    // Close existing connection if any
-    if (this.connection) {
-      try {
-        this.connection.ws.close()
-      } catch (err) {
-        this.debugLog(`Error closing old connection: ${err}`)
-      }
-      this.connection = null
-    }
-
-    // Attempt to reconnect
+    if (this.isShuttingDown || this.reconnecting || this.getCdpUrl()) return
+    this.reconnecting = true
     try {
-      await this.connectToCDP()
-      await this.enableCDPDomains()
-      await this.setupInteractionTracking()
-      this.logger("browser", "[CDP] Reconnection successful! Monitoring restored.")
-      this.debugLog("CDP reconnection completed successfully and monitoring was restored")
-    } catch (err) {
-      this.logger("browser", `[CDP] Reconnection failed: ${err}`)
-      throw err
+      this.debugLog("Starting CDP reconnection attempt")
+      this.logger("browser", "[CDP] Starting reconnection process...")
+
+      // Close existing connection if any
+      if (this.connection) {
+        try {
+          this.connection.ws.close()
+        } catch (err) {
+          this.debugLog(`Error closing old connection: ${err}`)
+        }
+        this.connection = null
+      }
+
+      // Attempt to reconnect
+      try {
+        await this.connectToCDP()
+        await this.enableCDPDomains()
+        await this.setupInteractionTracking()
+        this.logger("browser", "[CDP] Reconnection successful! Monitoring restored.")
+        this.debugLog("CDP reconnection completed successfully and monitoring was restored")
+      } catch (err) {
+        this.logger("browser", `[CDP] Reconnection failed: ${err}`)
+        throw err
+      }
+    } finally {
+      this.reconnecting = false
     }
   }
 
@@ -1435,9 +1443,6 @@ export class CDPMonitor {
 
       this.logger("browser", errorMsg)
       void this.logReactSnapshot("exception context", true)
-
-      // Take screenshot immediately on errors (no delay needed)
-      this.takeScreenshot("error")
     })
 
     // Browser console logs via Log domain (additional capture method)
@@ -1555,15 +1560,11 @@ export class CDPMonitor {
       }
 
       this.logger("browser", `[NAVIGATION] ${url}`)
-
-      // Mark that we're in a navigation - we'll take a screenshot when it settles
-      this.navigationInProgress = true
     })
 
-    // Page load events for better screenshot timing
+    // Reinject interaction tracking when documents load
     this.onCDPEvent("Page.loadEventFired", async (_event) => {
       this.logger("browser", "[DOM] Load event fired")
-      this.takeScreenshot("page-loaded")
       // Reinject interaction tracking on page load
       await this.setupInteractionTracking()
       void this.logReactSnapshot("post-load context")
@@ -1571,29 +1572,9 @@ export class CDPMonitor {
 
     this.onCDPEvent("Page.domContentEventFired", async (_event) => {
       this.logger("browser", "[DOM] DOM content loaded")
-      // Skip screenshot on DOM content loaded - we'll get one on page-loaded
       // Reinject interaction tracking on DOM content loaded
       await this.setupInteractionTracking()
       void this.logReactSnapshot("domcontentloaded context")
-    })
-
-    // Network activity tracking for better screenshot timing
-    this.onCDPEvent("Network.requestWillBeSent", (_event) => {
-      this.pendingRequests++
-      if (this.networkIdleTimer) {
-        clearTimeout(this.networkIdleTimer)
-        this.networkIdleTimer = null
-      }
-    })
-
-    this.onCDPEvent("Network.loadingFinished", (_event) => {
-      this.pendingRequests--
-      this.scheduleNetworkIdleScreenshot()
-    })
-
-    this.onCDPEvent("Network.loadingFailed", (_event) => {
-      this.pendingRequests--
-      this.scheduleNetworkIdleScreenshot()
     })
 
     // DOM mutations for interaction context
@@ -1632,6 +1613,7 @@ export class CDPMonitor {
       if (params.targetId === monitoredTarget && this.onWindowClosedCallback && !this.isShuttingDown) {
         this.debugLog("Chrome window was manually closed, triggering d3k shutdown")
         this.logger("browser", "[TARGET] Chrome window manually closed, shutting down d3k")
+        this.prepareShutdown()
         this.onWindowClosedCallback()
       }
     })
@@ -1742,11 +1724,6 @@ export class CDPMonitor {
       throw error
     }
 
-    // Take a delayed screenshot to catch dynamic content
-    setTimeout(() => {
-      this.takeScreenshot("navigation-delayed")
-    }, 2000)
-
     // Set up interaction tracking - but be more efficient about it
     const trackingStartTime = Date.now()
     this.debugLog("Setting up interaction tracking")
@@ -1765,8 +1742,6 @@ export class CDPMonitor {
 
     // Start polling for interactions from the injected script
     this.startInteractionPolling()
-
-    // Multiple screenshot triggers will ensure we catch the initial page load
   }
 
   async navigateToApp(port: string, useHttps: boolean = false): Promise<void> {
@@ -1794,35 +1769,6 @@ export class CDPMonitor {
         try {
           if (!window.__dev3000_cdp_tracking) {
             window.__dev3000_cdp_tracking = true;
-            
-            ${
-              this.pluginReactScan
-                ? `
-            // Inject react-scan for React performance monitoring
-            if (!window.__REACT_SCAN_INJECTED__) {
-              const script = document.createElement('script');
-              script.src = 'https://unpkg.com/react-scan@latest/dist/auto.global.js';
-              script.onload = () => {
-                console.debug('[DEV3000] react-scan loaded successfully');
-                window.__REACT_SCAN_INJECTED__ = true;
-                
-                // Optional: Configure react-scan
-                if (window.ReactScan && window.ReactScan.configure) {
-                  window.ReactScan.configure({
-                    // Add any configuration options here
-                    playSound: false,
-                    showToolbar: true
-                  });
-                }
-              };
-              script.onerror = (err) => {
-                console.debug('[DEV3000] Failed to load react-scan:', err);
-              };
-              document.head.appendChild(script);
-            }
-            `
-                : ""
-            }
             
             // Helper function to generate CSS selector for element
             function getElementSelector(el) {
@@ -2138,11 +2084,6 @@ export class CDPMonitor {
 
         for (const interaction of interactions) {
           this.logger("browser", `[INTERACTION] ${interaction.message}`)
-
-          // Take screenshot when scroll settles
-          if (interaction.message.startsWith("SCROLL_SETTLED")) {
-            this.takeScreenshot("scroll-settled")
-          }
         }
 
         for (const reactEvent of reactEvents) {
@@ -2178,73 +2119,6 @@ export class CDPMonitor {
     setTimeout(() => {
       pollInteractions()
     }, 1000)
-  }
-
-  private scheduleNetworkIdleScreenshot(): void {
-    // Only take network-idle screenshots after a navigation event
-    // This prevents screenshot spam from background AJAX/fetch polls
-    if (!this.navigationInProgress) {
-      return
-    }
-
-    // Only schedule if we have 0 pending requests
-    if (this.pendingRequests === 0) {
-      if (this.networkIdleTimer) {
-        clearTimeout(this.networkIdleTimer)
-      }
-
-      // Wait 500ms of network idle before taking screenshot
-      this.networkIdleTimer = setTimeout(() => {
-        this.takeScreenshot("navigation-settled")
-        // Reset navigation flag since we've captured the settled state
-        this.navigationInProgress = false
-        this.networkIdleTimer = null
-      }, 500)
-    }
-  }
-
-  private async takeScreenshot(event: string): Promise<string | null> {
-    if (!this.automaticScreenshots) return null
-    try {
-      // Throttle screenshots to avoid spam
-      const now = Date.now()
-      const timeSinceLastScreenshot = now - this.lastScreenshotTime
-
-      // Special cases that should always take screenshots
-      const priorityEvents = ["error", "crash"]
-
-      // If not a priority event and we took a screenshot recently, skip it
-      if (!priorityEvents.includes(event) && timeSinceLastScreenshot < this.minScreenshotInterval) {
-        this.debugLog(`Skipping screenshot for ${event} - only ${timeSinceLastScreenshot}ms since last screenshot`)
-        return null
-      }
-
-      // Update last screenshot time
-      this.lastScreenshotTime = now
-      const result = await this.sendCDPCommand("Page.captureScreenshot", {
-        format: "png",
-        quality: 80,
-        clip: undefined, // Full viewport
-        fromSurface: true
-      })
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
-      const filename = `${timestamp}-${event}.png`
-      const screenshotPath = join(this.screenshotDir, filename)
-
-      // Save the base64 image
-      const resultWithData = result as { data: string }
-      const buffer = Buffer.from(resultWithData.data, "base64")
-      writeFileSync(screenshotPath, buffer)
-
-      // Log screenshot with file path
-      this.logger("browser", `[SCREENSHOT] ${screenshotPath}`)
-
-      return filename
-    } catch (error) {
-      this.logger("browser", `[CDP] Screenshot failed: ${error}`)
-      return null
-    }
   }
 
   // Enhanced replay functionality using CDP

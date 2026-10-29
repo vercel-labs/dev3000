@@ -1,43 +1,92 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
+import { readFileSync } from "node:fs"
 import { Command } from "commander"
 import { getPortlessProxyStatus, installPortlessService } from "../portless.js"
 import { getAgentBrowserBinaryPath } from "../utils/agent-browser.js"
+import { readRecentEvents, selectEventView } from "./event-views.js"
+import { parseHarness } from "./harness.js"
 import { startRuntime } from "./runtime.js"
+import { addSandboxProjectOptions, registerSandboxCommand, runSandboxProject } from "./sandbox-command.js"
 import { queryRuntime, type RuntimeSession, readRuntimeSession } from "./session.js"
 
-// The skill helper acquires this package outside the target pnpm workspace.
-// Restore the app cwd before any command resolves project/session state, and
-// do not pass this bootstrap-only setting to the app or browser.
 if (process.env.D3K_BOOTSTRAP_CWD) {
   process.chdir(process.env.D3K_BOOTSTRAP_CWD)
   delete process.env.D3K_BOOTSTRAP_CWD
 }
 
 const print = (value: unknown) => console.log(JSON.stringify(value))
+const version = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version as string
 const program = new Command()
-  .name("d3k-runtime")
-  .description("Skill-owned dev server and browser evidence, held in memory")
+  .name("d3k")
+  .version(version)
+  .description("Dev server and managed browser with a bounded, in-memory event timeline")
+registerSandboxCommand(program)
+addSandboxProjectOptions(program)
+  .option("--command <command>", "Remote dev command")
+  .option("--headless", "Run local Chrome headlessly")
+  .action(runSandboxProject)
+
+function positiveInteger(value: string): number {
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed < 1) throw new Error("Expected a positive integer")
+  return parsed
+}
+
+program
+  .command("sandbox-serve", { hidden: true })
+  .option("--command <command>")
+  .option("--startup-timeout <ms>", "Server startup deadline in milliseconds", "300000")
+  .action(async (options) => {
+    let input = ""
+    for await (const chunk of process.stdin) {
+      input += chunk.toString()
+      if (input.length > 8192) throw new Error("Sandbox configuration too large")
+    }
+    const sandbox = JSON.parse(input) as NonNullable<Parameters<typeof startRuntime>[0]>["sandbox"]
+    if (
+      !sandbox ||
+      ![sandbox.serverPort, sandbox.bridgePort].every(
+        (port) => Number.isSafeInteger(port) && port > 0 && port <= 65535
+      ) ||
+      sandbox.serverPort === sandbox.bridgePort
+    )
+      throw new Error("Invalid sandbox ports")
+    await startRuntime({ command: options.command, startupTimeout: positiveInteger(options.startupTimeout), sandbox })
+  })
 program
   .command("start")
-  .option("--command <command>", "Dev server command (defaults to package manager's dev script)")
+  .description("Start the local app and browser; retain this process while testing")
+  .option("--harness <name>", "Run fx, codex, or claude in this terminal when ready", parseHarness)
+  .option("--command <command>", "Dev command (defaults to the package manager's dev script)")
   .option("--headless", "Headless browser for CI")
   .option("--servers-only", "Intentionally omit browser monitoring")
-  .option("--startup-timeout <ms>", "Server startup deadline", "120000")
+  .option("--startup-timeout <ms>", "Server startup deadline in milliseconds", "120000")
+  .option("--browser-navigation-timeout <ms>", "Browser navigation deadline in milliseconds", "30000")
+  .option("--browser <path>", "Browser executable path")
+  .option("--profile-dir <dir>", "Browser profile directory (defaults to the project profile)")
+  .option("--debug", "Browser diagnostic output")
   .action(async (options) => {
-    const startupTimeout = Number(options.startupTimeout)
-    if (!Number.isSafeInteger(startupTimeout) || startupTimeout < 1) throw new Error("Invalid startup timeout")
-    await startRuntime({ ...options, startupTimeout })
+    if (options.serversOnly && (options.headless || options.browser || options.profileDir || options.harness))
+      throw new Error("--servers-only cannot be combined with browser options")
+    if (options.harness && !process.stdin.isTTY) throw new Error("--harness requires an interactive terminal")
+    await startRuntime({
+      ...options,
+      startupTimeout: positiveInteger(options.startupTimeout),
+      browserNavigationTimeout: positiveInteger(options.browserNavigationTimeout)
+    })
   })
-program.command("status").action(async () => {
-  if (!readRuntimeSession()) {
-    print({ running: false, ready: false })
-    return
-  }
-  print(await queryRuntime("/status"))
-})
+program
+  .command("status")
+  .description("Show live runtime status")
+  .option("--json", "Output JSON (also the default)")
+  .action(async () => {
+    if (!readRuntimeSession()) return print({ running: false, ready: false })
+    print(await queryRuntime("/status"))
+  })
 program
   .command("events")
+  .description("Read timeline events after a cursor")
   .option("--after <cursor>", "Read after this sequence number", "0")
   .option("--session <id>", "Previous session id, to detect resets")
   .option("--limit <count>", "Maximum events, 1–500", "100")
@@ -50,9 +99,38 @@ program
     if (options.level) params.set("level", options.level)
     print(await queryRuntime(`/events?${params}`))
   })
-program.command("stop").action(async () => print(await queryRuntime("/stop", process.cwd(), "POST")))
+for (const errors of [false, true]) {
+  const command = program
+    .command(errors ? "errors" : "logs")
+    .description(errors ? "Show recent errors from the live timeline" : "Show recent events from the live timeline")
+    .option("-n, --count <count>", "Number of matching events, 1–500", errors ? "10" : "50")
+    .option("--json", "Include event cursor and evidence-gap metadata as JSON")
+  if (errors) command.option("-c, --context", "Include up to five preceding events per error")
+  else command.option("--type <source>", "Filter by server, browser, runtime, or all", "all")
+  command.action(async (options) => {
+    const source = options.type && options.type !== "all" ? options.type : undefined
+    if (source && !["server", "browser", "runtime"].includes(source)) throw new Error("Invalid event source")
+    const count = positiveInteger(options.count)
+    if (count > 500) throw new Error("count must be 1–500")
+    const view = selectEventView(await readRecentEvents(queryRuntime), {
+      count,
+      source,
+      errors,
+      context: options.context
+    })
+    if (options.json) return print(view)
+    if (view.dropped) console.log(`[runtime] ${view.dropped} earlier events are no longer retained`)
+    for (const event of view.events) console.log(`${event.timestamp} [${event.source}/${event.level}] ${event.message}`)
+    if (!view.events.length) console.log("No matching events in the retained timeline.")
+  })
+}
+program
+  .command("stop")
+  .description("Stop this project's app and browser")
+  .action(async () => print(await queryRuntime("/stop", process.cwd(), "POST")))
 program
   .command("browser")
+  .description("Drive the runtime's monitored browser with agent-browser")
   .allowUnknownOption()
   .argument("[args...]")
   .action(async (args: string[]) => {
@@ -74,19 +152,27 @@ program
         { stdio: "inherit" }
       )
       child.on("error", reject)
-      child.on("exit", (code) => {
-        if (code !== 0) reject(new Error(`agent-browser exited ${code}`))
-        else resolveRun()
-      })
+      child.on("exit", (code) => (code !== 0 ? reject(new Error(`agent-browser exited ${code}`)) : resolveRun()))
     })
   })
-const portless = program.command("portless")
-portless.command("status").action(() => print(getPortlessProxyStatus()))
+const portless = program.command("portless").description("Prepare canonical local HTTPS")
+portless
+  .command("status")
+  .option("--json", "Output JSON (also the default)")
+  .action(() => print(getPortlessProxyStatus()))
 portless.command("setup").action(async () => {
   const result = await installPortlessService()
   print(result)
   if (!result.success) process.exitCode = 1
 })
+program
+  .command("upgrade")
+  .description("Explicitly upgrade the global package with Bun")
+  .action(() => {
+    const result = spawnSync("bun", ["add", "--global", "dev3000@latest"], { stdio: "inherit", shell: false })
+    if (result.error) throw result.error
+    process.exitCode = result.status ?? 1
+  })
 program.parseAsync().catch((error) => {
   console.error(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
   process.exitCode = 1

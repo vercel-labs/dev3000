@@ -1,14 +1,17 @@
 import { mkdtempSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
-import { afterEach, describe, expect, it } from "vitest"
+import { RouteStore } from "portless"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   buildPortlessServerCommand,
   isCanonicalPortlessUrl,
   isPortlessHostnameHeld,
   type PortlessRuntime,
   parsePortlessProxyStatus,
-  parsePortlessUrl
+  parsePortlessUrl,
+  registerPortlessAlias,
+  removePortlessAlias
 } from "./portless"
 
 const runtime: PortlessRuntime = {
@@ -103,7 +106,23 @@ describe("isPortlessHostnameHeld", () => {
   }
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("owns sandbox aliases by process and cannot remove another owner's route", () => {
+    const dir = stateDirWith([])
+    vi.stubEnv("PORTLESS_STATE_DIR", dir)
+    const route = { ...runtime, name: "songbook.d3k", url: "https://songbook.d3k.localhost" }
+    registerPortlessAlias(route, 4321)
+    const store = new RouteStore(dir)
+    expect(store.loadRoutes()).toMatchObject([{ hostname: "songbook.d3k.localhost", port: 4321, pid: process.pid }])
+    removePortlessAlias(route)
+    expect(store.loadRoutes()).toEqual([])
+    store.addRoute("songbook.d3k.localhost", 4322, 0)
+    expect(() => registerPortlessAlias(route, 4321)).toThrow()
+    removePortlessAlias(route)
+    expect(store.loadRoutes()[0].port).toBe(4322)
   })
 
   it("treats a route owned by a live process as held", () => {

@@ -131,7 +131,7 @@ describe("Chrome restore prompt suppression", () => {
   })
 
   it("sends Browser.close even when connected directly to a page target", async () => {
-    const monitor = new CDPMonitor("/tmp/d3k-profile", "/tmp/d3k-screenshots", () => {})
+    const monitor = new CDPMonitor("/tmp/d3k-profile", () => {})
     const sendCDPCommand = vi.fn(async () => ({}))
     const waitForBrowserExit = vi.fn(async () => true)
     const killInstanceChromeProcesses = vi.fn()
@@ -159,7 +159,7 @@ describe("Chrome restore prompt suppression", () => {
 
 describe("monitored target ownership", () => {
   it("ignores unrelated destroyed targets and stops only when its page closes", () => {
-    const monitor = new CDPMonitor("/tmp/d3k-profile", "/tmp/d3k-screenshots", () => {})
+    const monitor = new CDPMonitor("/tmp/d3k-profile", () => {})
     const onClosed = vi.fn()
     monitor.setOnWindowClosedCallback(onClosed)
     const internal = monitor as unknown as {
@@ -173,5 +173,90 @@ describe("monitored target ownership", () => {
     expect(onClosed).not.toHaveBeenCalled()
     internal.handleCDPMessage({ method: "Target.targetDestroyed", params: { targetId: "owned" } })
     expect(onClosed).toHaveBeenCalledOnce()
+  })
+})
+
+describe("external browser recovery", () => {
+  it("retries after exhausted recovery, coalesces concurrent reconnects, and respects shutdown", async () => {
+    const monitor = new CDPMonitor("/tmp/d3k-profile", () => {})
+    let finishConnect: () => void = () => {}
+    const connectToCDP = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Companion offline"))
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishConnect = resolve
+          })
+      )
+    const enableCDPDomains = vi.fn(async () => {})
+    const setupInteractionTracking = vi.fn(async () => {})
+    Object.assign(monitor as unknown as Record<string, unknown>, {
+      externalCdpBase: "http://127.0.0.1:1234",
+      connectToCDP,
+      enableCDPDomains,
+      setupInteractionTracking
+    })
+    await expect(monitor.recoverExternalConnection()).rejects.toThrow("Companion offline")
+    const recovery = monitor.recoverExternalConnection()
+    await monitor.recoverExternalConnection()
+    expect(connectToCDP).toHaveBeenCalledTimes(2)
+    finishConnect()
+    await recovery
+    expect(enableCDPDomains).toHaveBeenCalledOnce()
+    expect(setupInteractionTracking).toHaveBeenCalledOnce()
+    Object.assign(monitor as unknown as Record<string, unknown>, {
+      cdpUrl: "ws://127.0.0.1:1234/devtools/page/recovered",
+      connection: { ws: { readyState: 1 } }
+    })
+    await monitor.recoverExternalConnection()
+    expect(connectToCDP).toHaveBeenCalledTimes(2)
+    Object.assign(monitor as unknown as Record<string, unknown>, { connection: null })
+    monitor.prepareShutdown()
+    await monitor.recoverExternalConnection()
+    expect(connectToCDP).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("browser session termination", () => {
+  it("ends recovery when the final window is gone without creating an about:blank target", async () => {
+    const fetchMock = vi.fn(async () => new Response("[]", { headers: { "content-type": "application/json" } }))
+    vi.stubGlobal("fetch", fetchMock)
+    try {
+      const monitor = new CDPMonitor("/tmp/d3k-profile", () => {})
+      Object.assign(monitor, { externalCdpBase: "http://127.0.0.1:1234" })
+      const onClosed = vi.fn()
+      monitor.setOnWindowClosedCallback(onClosed)
+      await expect(monitor.recoverExternalConnection()).rejects.toThrow("no open targets")
+      expect(onClosed).toHaveBeenCalledOnce()
+      expect(fetchMock).toHaveBeenCalledOnce()
+      expect(fetchMock.mock.calls[0][0]).not.toContain("/json/new")
+      await monitor.recoverExternalConnection()
+      expect(fetchMock).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it("does not resume discovery after shutdown while a discovery request is in flight", async () => {
+    let finish: (value: Response) => void = () => {}
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+        })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    try {
+      const monitor = new CDPMonitor("/tmp/d3k-profile", () => {})
+      Object.assign(monitor, { externalCdpBase: "http://127.0.0.1:1234" })
+      const recovering = monitor.recoverExternalConnection()
+      monitor.prepareShutdown()
+      finish(new Response("[]"))
+      await expect(recovering).rejects.toThrow("ending")
+      expect(fetchMock).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
