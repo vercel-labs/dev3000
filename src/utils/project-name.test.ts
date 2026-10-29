@@ -48,6 +48,18 @@ describe("getProjectName", () => {
     expect(result1).not.toBe(result2)
   })
 
+  it("should keep the path hash when the package.json name is long", () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(JSON.stringify({ name: "@acme-corp/marketing-website-frontend-application" }))
+
+    const result1 = getProjectName("/home/user/worktrees/main/apps/web")
+    const result2 = getProjectName("/home/user/worktrees/feature/apps/web")
+
+    expect(result1).toMatch(/^acme-corp-marketing-website-frontend-applic-[a-f0-9]{6}$/)
+    expect(result1.length).toBeLessThanOrEqual(50)
+    expect(result1).not.toBe(result2)
+  })
+
   it("should use pyproject.toml name for Python projects", () => {
     mockExistsSync.mockImplementation((path) => path.includes("pyproject.toml"))
     mockReadFileSync.mockReturnValue('[project]\nname = "django-app"\nversion = "1.0.0"')
