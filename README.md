@@ -71,13 +71,12 @@ Run this from any directory; the project repository never needs to exist on your
 
 ```bash
 vercel login
-bunx agent-browser install
 d3k --project my-team/my-project --name my-dev
 # The terminal enters the remote project directory. Then:
 fx
 ```
 
-This experimental command needs a recent Vercel CLI (tested with 59.26.0), Bun, Node.js 24+, macOS, Chrome for Testing (`bunx agent-browser install`), and access to Vercel Sandbox. Run it from any directory: no local project checkout is needed. It uses your Vercel login to resolve the linked GitHub repository, project root, Development environment, and install/dev commands. It clones and installs the project remotely, uploads the installed d3k distribution, launches the dev server, opens a dedicated local Chrome, and enters the sandbox shell. `d3k sandbox --project my-project --scope my-team` is equivalent.
+This experimental command needs a recent Vercel CLI (tested with 59.26.0), Bun, Node.js 24+, macOS, and access to Vercel Sandbox. d3k downloads Chrome for Testing automatically on first use and reuses it afterward. Run it from any directory: no local project checkout is needed. It uses your Vercel login to resolve the linked GitHub repository, project root, Development environment, and install/dev commands. It clones and installs the project remotely, uploads the installed d3k distribution, launches the dev server, opens a dedicated local Chrome, and enters the sandbox shell. `d3k sandbox --project my-project --scope my-team` is equivalent.
 
 The shell starts in the Vercel project's root. d3k uses the image's fx binary or installs it from fx.sh when absent. Authenticate your harness inside the sandbox before use; d3k does not provision Gateway keys or forward laptop harness credentials. Project processes and harnesses share the sandbox identity, so credentials you manually configure there are accessible to project code. Use `--no-fx` to skip installation. App environment variables are supplied to dependency installation and the dev runtime; the interactive harness shell does not automatically inherit them.
 

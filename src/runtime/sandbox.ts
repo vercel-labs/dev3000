@@ -127,9 +127,9 @@ async function freePort(): Promise<number> {
 }
 
 export async function launchSandbox(options: SandboxOptions): Promise<void> {
-  const isolatedBrowserPath = sandboxChromePath()
   const scope = options.scope ? ["--scope", options.scope] : []
   const log = (message: string) => console.error(`[d3k sandbox] ${message}`)
+  const isolatedBrowserPath = await sandboxChromePath(log)
   const temporary = mkdtempSync(join(tmpdir(), "d3k-sandbox-"))
   let localProxy: Awaited<ReturnType<typeof startLocalProxy>> | undefined
   let localRoute: PortlessRuntime | undefined

@@ -1,8 +1,10 @@
+import { spawn } from "node:child_process"
 import { createHash, X509Certificate } from "node:crypto"
 import { existsSync, mkdirSync, readdirSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import { connect } from "node:tls"
+import { getAgentBrowserBinaryPath } from "../utils/agent-browser.js"
 
 /** Filesystem confinement applies to Chrome's browser process and every child, including CDP file operations. */
 export function isolatedChromeInvocation(binary: string, args: string[], profile: string, certificatePin?: string) {
@@ -63,8 +65,25 @@ export function isolatedChromeInvocation(binary: string, args: string[], profile
 }
 
 /** Use the separately installed automation browser, never a managed everyday profile. */
-export function sandboxChromePath(): string {
+export async function sandboxChromePath(log: (message: string) => void): Promise<string> {
   if (process.platform !== "darwin") throw new Error("Sandbox mode currently requires macOS filesystem confinement")
+  const installed = findSandboxChrome()
+  if (installed) return installed
+  log("Downloading Chrome for Testing for the isolated browser (first run only)")
+  await new Promise<void>((accept, reject) => {
+    const installer = spawn(getAgentBrowserBinaryPath(), ["install"], { stdio: "inherit", shell: false })
+    installer.once("error", (error) => reject(new Error(`Could not install Chrome for Testing: ${error.message}`)))
+    installer.once("exit", (code) => {
+      if (code === 0) accept()
+      else reject(new Error("Chrome for Testing installation failed. Check your network connection and retry d3k."))
+    })
+  })
+  const binary = findSandboxChrome()
+  if (!binary) throw new Error("Chrome for Testing installation completed but its application bundle was not found")
+  return binary
+}
+
+function findSandboxChrome(): string | undefined {
   const root = join(homedir(), ".agent-browser", "browsers")
   const installed = existsSync(root) ? readdirSync(root).filter((name) => /^chrome-[0-9.]+$/.test(name)) : []
   installed.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
@@ -72,7 +91,7 @@ export function sandboxChromePath(): string {
     const binary = join(root, name, "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing")
     if (existsSync(binary)) return binary
   }
-  throw new Error("Sandbox mode requires Chrome for Testing. Run bunx agent-browser install, then retry")
+  return undefined
 }
 
 /** Trust exactly the certificate served by canonical Portless, without reading the user's keychain. */

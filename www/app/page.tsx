@@ -64,7 +64,7 @@ export default function HomePage() {
           <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
             <code>
               {
-                "vercel login\npnpm dlx agent-browser install\nd3k --project my-team/my-project --harness fx\n# Browser: https://my-project.d3k.localhost"
+                "vercel login\nd3k --project my-team/my-project --harness fx\n# Browser: https://my-project.d3k.localhost"
               }
             </code>
           </pre>
