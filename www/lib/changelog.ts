@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.188",
+    date: "2026-10-29",
+    type: "patch",
+    highlights: [
+      "Install isolated Chrome automatically on first sandbox run"
+    ]
+  },
+
+  {
     version: "0.0.187",
     date: "2026-10-29",
     type: "patch",

@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.188] - 2026-10-29
+
+**Patch Release**
+
+- Install isolated Chrome automatically on first sandbox run
+
 ## [0.0.187] - 2026-10-29
 
 **Patch Release**
