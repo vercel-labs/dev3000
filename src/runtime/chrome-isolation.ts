@@ -50,6 +50,8 @@ export function isolatedChromeInvocation(binary: string, args: string[], profile
   const chromeArgs = args.filter((arg) => arg !== "--no-sandbox" && arg !== "--disable-setuid-sandbox")
   chromeArgs.push(
     "--no-sandbox",
+    // Chrome's GPU-test startup mode omits testing/flag banners; OS confinement still applies.
+    "--test-type=gpu",
     "--disable-breakpad",
     "--password-store=basic",
     "--use-mock-keychain",
