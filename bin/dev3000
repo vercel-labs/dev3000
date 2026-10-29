@@ -1,3 +1,2 @@
 #!/usr/bin/env node
-// Compatibility CLI. The skill uses bin/d3k-runtime, which doesn't load this UI.
-import "../dist/cli.js"
+import "../dist/runtime/cli.js"

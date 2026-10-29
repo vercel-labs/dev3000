@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
-import { createServer } from "node:http"
+import { createServer, get as httpGet } from "node:http"
 import { get as httpsGet } from "node:https"
 import { createServer as createTcpServer } from "node:net"
 import { homedir } from "node:os"
@@ -15,8 +15,10 @@ import {
   preparePortlessRuntime
 } from "../portless.js"
 import { getPortlessName } from "../utils/project-name.js"
-import { findCurrentSession } from "../utils/session.js"
+import { startBridge } from "./bridge.js"
 import { recordBrowserEvent } from "./browser-events.js"
+import { type Harness, launchLocalHarness, parseHarness } from "./harness.js"
+import { startSandboxProxy } from "./sandbox-proxy.js"
 import { queryRuntime, type RuntimeSession, readRuntimeSession, runtimePaths } from "./session.js"
 import { type EventLevel, type EventSource, Timeline } from "./timeline.js"
 
@@ -25,7 +27,7 @@ async function probeServer(url: string): Promise<boolean> {
   const caPath = join(process.env.PORTLESS_STATE_DIR || join(homedir(), ".portless"), "ca.pem")
   const ca = existsSync(caPath) ? readFileSync(caPath) : undefined
   return new Promise((resolveProbe) => {
-    const request = httpsGet(url, { ca, timeout: 1500 }, (response) => {
+    const request = (url.startsWith("https:") ? httpsGet : httpGet)(url, { ca, timeout: 1500 }, (response) => {
       response.destroy()
       resolveProbe(![502, 503].includes(response.statusCode || 503))
     })
@@ -36,10 +38,17 @@ async function probeServer(url: string): Promise<boolean> {
 
 export interface RuntimeOptions {
   command?: string
+  harness?: Harness
   cwd?: string
   headless?: boolean
   serversOnly?: boolean
   startupTimeout?: number
+  browserNavigationTimeout?: number
+  browser?: string
+  profileDir?: string
+  debug?: boolean
+  /** Sandbox mode uses the companion’s stable local HTTPS origin; only the companion needs Portless. */
+  sandbox?: { appUrl: string; serverPort: number; bridgePort: number; token: string; proxyToken?: string }
 }
 
 async function freePort(): Promise<number> {
@@ -78,19 +87,29 @@ function defaultCommand(cwd: string): string {
 /** Own the server, browser, and evidence until the retained process is stopped. */
 export async function startRuntime(options: RuntimeOptions = {}): Promise<void> {
   const cwd = resolve(options.cwd || process.cwd())
+  if (options.harness) parseHarness(options.harness)
+  if (options.harness && options.serversOnly) throw new Error("--harness requires browser monitoring")
+  if (options.harness && !process.stdin.isTTY) throw new Error("--harness requires an interactive terminal")
   const existing = readRuntimeSession(cwd)
   if (existing) {
     console.log(JSON.stringify(await queryRuntime("/status", cwd)))
+    if (options.harness) await launchLocalHarness(options.harness, cwd, new AbortController().signal)
     return
   }
-  // A legacy CLI and the skill runtime must never own the same project together.
-  if (cwd === process.cwd() && findCurrentSession())
-    throw new Error("A legacy d3k session is active; stop it before starting the skill runtime")
-  const status = getPortlessProxyStatus()
-  if (!status.canonical || !status.serviceInstalled || status.setupRequired)
-    throw new Error("Canonical Portless is required. Run d3k-runtime portless setup, then retry.")
-  const prepared = preparePortlessRuntime(getPortlessName(cwd, isPortlessHostnameHeld))
-  if (!prepared.runtime) throw new Error(prepared.error || "Portless is unavailable")
+  if (options.sandbox) {
+    const url = new URL(options.sandbox.appUrl)
+    if (url.protocol !== "https:" || url.username || url.password || url.port)
+      throw new Error("Sandbox app must have a port-free HTTPS URL")
+  } else {
+    const status = getPortlessProxyStatus()
+    if (!status.canonical || !status.serviceInstalled || status.setupRequired)
+      throw new Error("Canonical Portless is required. Run d3k-runtime portless setup, then retry.")
+  }
+  const prepared = options.sandbox ? undefined : preparePortlessRuntime(getPortlessName(cwd, isPortlessHostnameHeld))
+  const portless = prepared?.runtime
+  if (!options.sandbox && !portless) throw new Error(prepared?.error || "Portless is unavailable")
+  const appUrl = options.sandbox?.appUrl || portless?.url
+  if (!appUrl) throw new Error("No app URL available")
   const command = options.command || defaultCommand(cwd)
   const paths = runtimePaths(cwd)
   mkdirSync(paths.directory, { recursive: true, mode: 0o700 })
@@ -121,12 +140,15 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
     cwd,
     socketPath: paths.socketPath,
     token: randomBytes(32).toString("hex"),
-    appUrl: prepared.runtime.url,
+    appUrl,
     ready: false,
     cdpUrl: null
   }
   let child: ChildProcess | undefined
   let monitor: CDPMonitor | undefined
+  let bridge: Awaited<ReturnType<typeof startBridge>> | undefined
+  let proxy: Awaited<ReturnType<typeof startSandboxProxy>> | undefined
+  let serverPort = options.sandbox?.serverPort
   let closing = false
   let failed = false
   const persist = () => writeFileSync(paths.sessionFile, JSON.stringify(session), { mode: 0o600 })
@@ -180,9 +202,11 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
     }
   })
 
+  const harnessAbort = new AbortController()
   const shutdown = async () => {
     if (closing) return
     closing = true
+    harnessAbort.abort()
     console.log(
       JSON.stringify({
         stopped: true,
@@ -201,6 +225,8 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
       }
     }
     await monitor?.shutdown().catch(() => {})
+    await bridge?.close()
+    await proxy?.close()
     if (child?.pid && process.platform !== "win32") {
       const pid = child.pid
       await new Promise((resolveWait) => setTimeout(resolveWait, 300))
@@ -241,13 +267,43 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
     })
     if (process.platform !== "win32") chmodSync(paths.socketPath, 0o600)
     persist()
+    if (options.sandbox) {
+      serverPort = await freePort()
+      proxy = await startSandboxProxy({
+        port: options.sandbox.serverPort,
+        targetPort: serverPort,
+        appUrl: session.appUrl,
+        token: options.sandbox.proxyToken
+      })
+      bridge = await startBridge({
+        token: options.sandbox.token,
+        port: options.sandbox.bridgePort,
+        onState: (connected) => {
+          log(
+            "browser-bridge",
+            connected
+              ? "Local browser companion connected"
+              : "Browser bridge disconnected; evidence gap until reattached",
+            connected ? "info" : "warn"
+          )
+          if (connected && session.ready && !closing)
+            void monitor?.recoverExternalConnection().catch((error) => {
+              log("browser-recovery", `Could not restore browser monitoring: ${String(error)}`, "warn")
+            })
+        }
+      })
+    }
     log("starting", `Starting ${command}`)
-    child = spawn(buildPortlessServerCommand(prepared.runtime, command, { customCommand: true }), {
+    child = spawn(portless ? buildPortlessServerCommand(portless, command, { customCommand: true }) : command, {
       cwd,
       shell: true,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, FORCE_COLOR: "0" }
+      env: {
+        ...process.env,
+        FORCE_COLOR: "0",
+        ...(options.sandbox ? { PORT: String(serverPort), HOST: "0.0.0.0", HOSTNAME: "0.0.0.0" } : {})
+      }
     })
     for (const [stream, name] of [
       [child.stdout, "stdout"],
@@ -296,7 +352,7 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
     const deadline = Date.now() + (options.startupTimeout ?? 120000)
     let listening = false
     while (!closing && Date.now() < deadline) {
-      if (await probeServer(session.appUrl)) {
+      if (await probeServer(options.sandbox ? `http://127.0.0.1:${serverPort}` : session.appUrl)) {
         listening = true
         break
       }
@@ -308,24 +364,29 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
     }
     if (!listening) throw new Error(`Server did not become ready within ${options.startupTimeout ?? 120000}ms`)
     if (!options.serversOnly) {
+      while (bridge && !bridge.connected() && !closing && Date.now() < deadline) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 250))
+      }
+      if (closing) return
+      if (bridge && !bridge.connected())
+        throw new Error("Local browser companion did not connect before the startup deadline")
       monitor = new CDPMonitor(
-        join(paths.directory, "chrome-profile"),
-        join(paths.directory, "screenshots"),
+        options.profileDir ? resolve(options.profileDir) : join(paths.directory, "chrome-profile"),
         (_source, message) => {
           if (message.startsWith("[INTERACTION]"))
             timeline.append({ source: "browser", level: "info", kind: "interaction", message })
           else if (message.startsWith("[CDP]") || message.startsWith("[CRASH]")) log("browser-status", message)
         },
-        false,
-        undefined,
-        false,
+        options.debug,
+        options.browser,
         undefined,
         session.appUrl,
-        30000,
+        options.browserNavigationTimeout ?? 30000,
         await freePort(),
-        options.headless
+        options.headless,
+        undefined,
+        bridge?.cdpBase
       )
-      monitor.setAutomaticScreenshots(false)
       monitor.setEventObserver((event) => recordBrowserEvent(timeline, event))
       monitor.setOnWindowClosedCallback(() => {
         void shutdown()
@@ -344,6 +405,10 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
     console.log(
       JSON.stringify({ sessionId: session.sessionId, ready: true, appUrl: session.appUrl, cdpUrl: session.cdpUrl })
     )
+    if (options.harness) {
+      await launchLocalHarness(options.harness, cwd, harnessAbort.signal)
+      await shutdown()
+    }
   } catch (error) {
     // Surface recent startup evidence before the in-memory session is torn down.
     console.error(

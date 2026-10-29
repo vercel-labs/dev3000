@@ -125,7 +125,7 @@ export function getProjectDisplayName(cwd: string = process.cwd()): string {
  * Prefers the readable name (`my-app` -> https://my-app.localhost). The
  * path-hashed name is only used when that hostname is already held by another
  * project, so two checkouts with the same name can still run side by side.
- * The data directory (Chrome profile, logs) stays keyed by the hashed name
+ * The data directory (Chrome profile, session discovery) stays keyed by the hashed name
  * either way, so switching hostnames never shares or loses a profile.
  */
 export function getPortlessName(
@@ -138,7 +138,7 @@ export function getPortlessName(
 
 /**
  * Get the d3k data directory for a project
- * All project-specific files are stored here: logs, chrome profile, skills, session info
+ * Project browser profiles and session discovery are stored here
  * Structure: ~/.d3k/{projectName}/
  *
  * Honors D3K_DATA_DIR as a full override of the computed project directory.

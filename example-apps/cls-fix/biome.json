@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
   "root": true,
   "vcs": {
     "enabled": true,
@@ -8,18 +8,10 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": [
-      "**",
-      "!!**/.next",
-      "!!**/out",
-      "!!**/build",
-      "!**/next-env.d.ts"
-    ]
+    "includes": ["**", "!!**/.next", "!!**/out", "!!**/build", "!**/next-env.d.ts"]
   },
   "linter": {
-    "includes": [
-      "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"
-    ],
+    "includes": ["**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"],
     "domains": {
       "next": "recommended",
       "react": "recommended"

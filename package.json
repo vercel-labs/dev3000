@@ -12,12 +12,11 @@
   "files": [
     "bin/",
     "dist/",
-    "src/tui-interface-impl.tsx",
     "README.md",
     "skills/d3k/"
   ],
   "scripts": {
-    "build": "./node_modules/@typescript/native/bin/tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/ && mkdir -p dist/skills && cp -r src/skills/d3k dist/skills/",
+    "build": "./node_modules/@typescript/native/bin/tsc && mkdir -p dist/src && cp src/loading.html dist/src/",
     "typegen": "./scripts/typegen.sh",
     "typecheck": "./node_modules/@typescript/native/bin/tsc --noEmit && bun run --filter '*' typecheck",
     "format": "biome format --write .",
@@ -41,30 +40,21 @@
     "claude"
   ],
   "dependencies": {
-    "@opentui/core": "0.5.17",
-    "agent-browser": "0.38.2",
-    "chalk": "^6.0.1",
+    "@vercel/sandbox": "^3.9.0",
+    "agent-browser": "0.39.2",
     "commander": "15.0.0",
-    "ink": "8.0.0",
-    "ink-select-input": "^6.2.0",
-    "ink-spinner": "^5.0.0",
-    "ora": "9.4.1",
-    "package-manager-detector": "^1.9.0",
-    "portless": "0.15.7",
-    "react": "19.3.0",
+    "portless": "0.15.12",
     "ws": "^8.22.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.15",
-    "@types/node": "26.6.4",
-    "@types/react": "19.3.0",
+    "@biomejs/biome": "2.6.3",
+    "@types/node": "26.6.5",
     "@types/ws": "^8.18.2",
     "@typescript/native": "npm:typescript@^7.0.2",
     "husky": "^9.1.7",
-    "react-devtools-core": "8.0.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "5.0.3"
+    "vitest": "5.0.5"
   },
   "engines": {
     "node": ">=24.0.0"
@@ -81,18 +71,19 @@
   ],
   "overrides": {
     "@xhmikosr/decompress": "11.1.4",
-    "body-parser": "2.3.0",
+    "body-parser": "2.4.0",
     "defu": "6.1.7",
     "devalue": "5.9.4",
     "linkify-it": "6.1.0",
     "nanoid": "5.1.16",
     "path-to-regexp": "8.4.2",
     "piscina": "5.3.2",
-    "postcss": "8.5.29",
+    "postcss": "8.5.32",
     "qs": "6.16.0",
     "rollup": "4.64.3",
     "seroval": "1.6.9",
-    "vite": "8.3.4",
-    "yauzl": "3.4.0"
+    "vite": "8.3.5",
+    "yauzl": "3.4.0",
+    "zod": "4.6.7"
   }
 }

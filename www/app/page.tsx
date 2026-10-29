@@ -41,6 +41,65 @@ export default function HomePage() {
             evidence it needs. Sign-in state stays in the browser profile.
           </p>
         </section>
+        <section className="mt-20" aria-label="Launch a coding harness">
+          <h2 className="text-xl font-semibold">Start with your harness</h2>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Prefer to start from your terminal? Install the CLI, then run your local app with a coding harness. d3k
+            starts the server and browser before handing the terminal to the harness with d3k skill guidance.
+          </p>
+          <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
+            <code>{"bun add --global dev3000\nd3k portless setup\nd3k start --harness codex"}</code>
+          </pre>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Choose <code>fx</code>, <code>codex</code>, or <code>claude</code> with <code>--harness</code>. Use an
+            interactive terminal with the harness installed and signed in. Exiting the harness closes the session.
+          </p>
+        </section>
+        <section className="mt-20" aria-label="Remote project with local Chrome">
+          <h2 className="text-xl font-semibold">Remote code, local Chrome</h2>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Run your Vercel project and harness in a sandbox while Chrome uses your laptop’s CPU and GPU. No local
+            project checkout is needed. A stable HTTPS URL and an authenticated browser bridge connect them.
+          </p>
+          <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
+            <code>
+              {
+                "vercel login\nbunx agent-browser install\nd3k --project my-team/my-project --harness fx\n# Browser: https://my-project.d3k.localhost"
+              }
+            </code>
+          </pre>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Sandbox mode is experimental and requires macOS, Vercel CLI, Sandbox access, Bun, Node.js 24+, Chrome, and
+            local Portless setup. New sandboxes clone public repositories. Use <code>--attach my-dev</code> for an
+            existing sandbox containing a private checkout. Chrome is confined to its dedicated profile and system
+            files. Authenticate your harness inside the sandbox; d3k does not provision or forward Gateway keys.
+          </p>
+        </section>
+        <section className="mt-20" aria-label="Resume a sandbox session">
+          <h2 className="text-xl font-semibold">Exit and pick it back up</h2>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Exiting the sandbox harness or pressing Ctrl-C closes Chrome and prints your resume command. Resume restores
+            the checkout, hostname, browser profile, and harness choice with a fresh browser connection.
+          </p>
+          <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
+            <code>
+              {
+                "d3k --resume              # List saved sandbox sessions\nd3k --resume <id>         # Reconnect a session\nd3k --resume <id> --harness codex"
+              }
+            </code>
+          </pre>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Saved entries contain session metadata, not past terminal output. Resume requires the sandbox to still exist
+            and does not restore the harness conversation. See the{" "}
+            <a
+              href="https://github.com/vercel-labs/dev3000#resume-a-sandbox"
+              className="text-foreground underline underline-offset-4"
+            >
+              README
+            </a>{" "}
+            for command overrides and lifecycle details.
+          </p>
+        </section>
         <section className="mt-20 grid gap-8 sm:grid-cols-3" aria-label="How it works">
           <div>
             <h2 className="font-medium">One timeline</h2>

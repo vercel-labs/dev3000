@@ -4,42 +4,18 @@ This file is the source of truth for agent guidance in this repo. `CLAUDE.md` is
 
 ## Runtime
 
-- Use `d3k` as the default local runtime.
-- Canonical Portless HTTPS URLs are required by default and must be genuinely port-free (for example, `https://my-app.localhost`). Before starting d3k, run `d3k portless status --json`; if setup is required, run `d3k portless setup`, wait for the one-time administrator authorization, and verify Portless again. Do not start the app or browser until canonical Portless is ready unless the user explicitly requests `--no-portless`.
-- When the user asks to use, test, debug, or develop with d3k, start it in a retained background tool session. Do not make the user launch it or switch to the TUI.
+- Use the unified d3k runtime in `src/runtime/`. `d3k`, `dev3000`, and `d3k-runtime` expose the same commands.
+- From the target app, use `node <checkout>/skills/d3k/scripts/runtime.mjs` to test unreleased source. Do not use a previously published package for source validation.
+- Before local startup, run `d3k portless status --json`. Canonical port-free HTTPS must be ready. If needed run `d3k portless setup`, wait for one-time administrator authorization, then verify again. Do not start the local app or browser before it is ready.
+- Run `d3k start` in a retained background tool session. Keep it alive across edits and user testing; do not ask the user to launch it.
+- Use `start --command '<dev command>'` for custom servers. Startup and browser-navigation timeout values are milliseconds.
+- Inspect `d3k status`, retain its session ID and cursor, then read `d3k events --session <id> --after <cursor>`. Continue while `hasMore` is true. `logs` and `errors --context` are views over the same bounded timeline.
+- Drive the exact monitored browser with `d3k browser snapshot -i` and `d3k browser click @e2`. The runtime owns CDP; do not launch a second browser or override connection/profile options through the browser command.
+- Stop with `d3k stop` when asked. Persist only session discovery and browser profiles. Export screenshots through `d3k browser screenshot <absolute-path>` only on request.
+- Sandbox mode currently requires macOS and Chrome for Testing (`bunx agent-browser install`). Chrome runs under filesystem confinement; do not bypass it. Gateway keys are not automatically provisioned or forwarded. Sandbox mode runs the project remotely with local Chrome: `d3k --project <team/project>` or `d3k sandbox --project <team/project>`. No local project checkout is required. Sandbox apps use `https://<project>.d3k.localhost`; use `--hostname songbook` for `https://songbook.d3k.localhost`. Canonical Portless runs on the laptop. Use `--no-shell` to retain the companion in a background session. Private repos require an already provisioned sandbox and `--attach <name>`. Use `d3k --resume` to list saved sandbox sessions and `d3k --resume <id>` to recreate the browser connection; Ctrl-C prints the resume command.
+- Optional `--harness fx|codex|claude` starts the selected harness after readiness in an interactive terminal, using temporary d3k skill context. The CLI does not install local harness packages, persist logs, capture automatic screenshots/screencasts, or automatically upgrade itself.
 - Do not run `bun run dev` or `bun run build` for `www/`.
-- Start d3k with:
-  ```bash
-  d3k -t
-  ```
-- Primary debugging commands:
-  ```bash
-  d3k status --json
-  d3k errors --context
-  d3k logs -n 200
-  d3k logs --type browser
-  d3k logs --type server
-  ```
-- Drive the monitored browser with:
-  ```bash
-  d3k agent-browser snapshot -i
-  d3k agent-browser click @e2
-  ```
-  The session's CDP port is auto-connected. To target a different session, run `d3k agent-browser connect <port>` first.
-
-## Skill Runtime
-
-- The skill-first runtime is `src/runtime/`. Run it from the target app with `node <checkout>/skills/d3k/scripts/runtime.mjs`.
-- Its commands are `portless status`, `portless setup`, `start`, `status`, `events`, `browser`, and `stop`.
-- Retain `start` in a background session. It owns the dev server and monitored browser; do not start the legacy CLI alongside it.
-- Keep evidence in bounded memory. Persist only session discovery and the browser profile. Export screenshots only on request.
-- `www/` is a public landing page and changelog. Hosted dev agents, skill runners, workflows, sandboxes, authentication, and blob storage have been removed; do not recreate those surfaces.
-- Prefer the skill runtime for new development. The older `d3k -t` instructions above apply to the compatibility CLI.
-
-## Browser Tools
-
-- Use `agent-browser` by default.
-- Use `agent-browser` when you need to drive the exact headed browser session d3k is already monitoring via CDP.
+- `www/` is a public landing page and changelog. Hosted dev agents, skill runners, workflows, authentication, and blob storage have been removed; do not recreate those surfaces. Sandbox support belongs in the CLI.
 
 ## Development Rules
 
@@ -89,13 +65,13 @@ Recommended user prompt when autonomous deployment follow-through is desired:
 Commit and push, then keep polling the new Vercel deployment until it is Ready, monitor logs, rerun the relevant test flow against that exact deployment, and continue autonomously until it is actually working or you have a concrete blocker.
 ```
 
-## d3k CLI/TUI Changes
+## d3k CLI Changes
 
 - For changes under `src/`, run:
   ```bash
   bun run canary
   ```
-- This is required for d3k CLI/TUI changes.
+- This is required for d3k CLI changes.
 - It is not required for `www/`-only changes.
 
 ## UI Guidance

@@ -2,6 +2,7 @@ import { spawnSync } from "child_process"
 import { accessSync, chmodSync, constants, existsSync, readFileSync } from "fs"
 import { homedir } from "os"
 import { dirname, join } from "path"
+import { RouteStore } from "portless"
 import { fileURLToPath } from "url"
 
 const CANONICAL_PROXY_PORT = 443
@@ -425,4 +426,15 @@ export function buildPortlessServerCommand(
   }
 
   return args.join(" ")
+}
+
+/** Register a loopback service without replacing an existing route. */
+export function registerPortlessAlias(runtime: PortlessRuntime, port: number): void {
+  const store = new RouteStore(process.env.PORTLESS_STATE_DIR || join(homedir(), ".portless"))
+  store.addRoute(new URL(runtime.url).hostname, port, process.pid)
+}
+
+export function removePortlessAlias(runtime: PortlessRuntime): void {
+  const store = new RouteStore(process.env.PORTLESS_STATE_DIR || join(homedir(), ".portless"))
+  store.removeRoute(new URL(runtime.url).hostname, process.pid)
 }
