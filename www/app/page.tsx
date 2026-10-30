@@ -58,8 +58,8 @@ export default function HomePage() {
         <section className="mt-20" aria-label="Remote project with local Chrome">
           <h2 className="text-xl font-semibold">Remote code, local Chrome</h2>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Run your Vercel project and harness in a sandbox while Chrome uses your laptop’s CPU and GPU. No local
-            project checkout is needed. A stable HTTPS URL and an authenticated browser bridge connect them.
+            Run your Vercel project in a sandbox while Chrome uses your laptop’s CPU and GPU. No local project checkout
+            is needed. A stable HTTPS URL and an authenticated browser bridge connect them.
           </p>
           <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
             <code>
@@ -70,16 +70,40 @@ export default function HomePage() {
           </pre>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
             Sandbox mode is experimental and requires macOS, Vercel CLI, Sandbox access, Bun, Node.js 24+, Chrome, and
-            local Portless setup. New sandboxes clone public repositories. Use <code>--attach my-dev</code> for an
-            existing sandbox containing a private checkout. Chrome is confined to its dedicated profile and system
-            files. Authenticate your harness inside the sandbox; d3k does not provision or forward Gateway keys.
+            local Portless setup. The harness runs locally by default, with code and app environment in the sandbox. Use
+            <code> --harness-location sandbox</code> to run the harness remotely. New sandboxes clone public
+            repositories. Use <code>--attach my-dev</code> for an existing sandbox containing a private checkout. Chrome
+            is confined to its dedicated profile and system files. fx connects automatically to your team’s AI Gateway
+            with a project-scoped, expiring session key and a $5 spending limit. Use projects you trust with that
+            access.
+          </p>
+        </section>
+        <section className="mt-20" aria-label="Desktop assistants">
+          <h2 className="text-xl font-semibold">Use your desktop assistant</h2>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Connect ChatGPT or Claude Desktop through local MCP. Your assistant edits and tests code in the sandbox,
+            controls local Chrome, and can create PRs. No terminal harness or Gateway key is needed.
+          </p>
+          <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
+            <code>{"d3k mcp --print-config"}</code>
+          </pre>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Add the generated local server configuration to your desktop client, then ask it to open your project. See
+            the{" "}
+            <a
+              href="https://github.com/vercel-labs/dev3000#chatgpt-and-claude-desktop"
+              className="text-foreground underline underline-offset-4"
+            >
+              desktop setup instructions
+            </a>
+            .
           </p>
         </section>
         <section className="mt-20" aria-label="Resume a sandbox session">
           <h2 className="text-xl font-semibold">Exit and pick it back up</h2>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Exiting the sandbox harness or pressing Ctrl-C closes Chrome and prints your resume command. Resume restores
-            the checkout, hostname, browser profile, and harness choice with a fresh browser connection.
+            Exiting the harness or pressing Ctrl-C closes Chrome and prints your resume command. Resume restores the
+            checkout, hostname, browser profile, and harness choice with a fresh browser connection.
           </p>
           <pre className="mt-4 overflow-x-auto rounded-md border border-border p-4 text-sm">
             <code>

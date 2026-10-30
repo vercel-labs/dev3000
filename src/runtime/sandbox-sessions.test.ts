@@ -7,6 +7,7 @@ import {
   listSandboxSessions,
   readSandboxSession,
   type SandboxSession,
+  sandboxFxWorkspace,
   saveSandboxSession
 } from "./sandbox-sessions.js"
 
@@ -49,6 +50,19 @@ describe("sandbox resume discovery", () => {
     expect(listSandboxSessions(directory)).toEqual([updated])
     expect(readFileSync(join(directory, `${record.id}.json`), "utf8")).not.toContain("token")
   })
+  it("keeps fx's workspace stable and restores an older recorded workspace", () => {
+    const directory = fixture()
+    const workspace = sandboxFxWorkspace(record, directory)
+    expect(workspace).toBe(join(directory, "workspaces", record.id))
+    const saved = { ...record, harness: "fx" as const, harnessLocation: "local" as const, fxWorkspace: workspace }
+    saveSandboxSession(saved, directory)
+    expect(sandboxFxWorkspace(readSandboxSession(record.id, directory), "/different/temp")).toBe(workspace)
+    const legacy = { ...saved, fxWorkspace: "/private/tmp/d3k-sandbox-old/control" }
+    saveSandboxSession(legacy, directory)
+    expect(sandboxFxWorkspace(readSandboxSession(record.id, directory))).toBe(legacy.fxWorkspace)
+    expect(() => saveSandboxSession({ ...saved, fxWorkspace: "../escape" }, directory)).toThrow("Invalid")
+  })
+
   it("sorts sessions by recent use and skips malformed discovery records", () => {
     const directory = fixture()
     saveSandboxSession(record, directory)

@@ -4,10 +4,12 @@ import { readFileSync } from "node:fs"
 import { Command } from "commander"
 import { getPortlessProxyStatus, installPortlessService } from "../portless.js"
 import { getAgentBrowserBinaryPath } from "../utils/agent-browser.js"
+import { captureBrowserMetrics } from "./browser-metrics.js"
 import { readRecentEvents, selectEventView } from "./event-views.js"
 import { parseHarness } from "./harness.js"
 import { startRuntime } from "./runtime.js"
 import { addSandboxProjectOptions, registerSandboxCommand, runSandboxProject } from "./sandbox-command.js"
+import { runSandboxCli } from "./sandbox-process.js"
 import { queryRuntime, type RuntimeSession, readRuntimeSession } from "./session.js"
 
 if (process.env.D3K_BOOTSTRAP_CWD) {
@@ -21,6 +23,15 @@ const program = new Command()
   .name("d3k")
   .version(version)
   .description("Dev server and managed browser with a bounded, in-memory event timeline")
+program
+  .command("mcp")
+  .description("Serve sandbox and local browser tools to desktop clients over MCP stdio")
+  .option("--print-config", "Print desktop MCP configuration with absolute paths, then exit")
+  .action(async (options) => {
+    const { desktopMcpConfig, runDesktopMcp } = await import("./desktop-mcp.js")
+    if (options.printConfig) return print(desktopMcpConfig())
+    await runDesktopMcp()
+  })
 registerSandboxCommand(program)
 addSandboxProjectOptions(program)
   .option("--command <command>", "Remote dev command")
@@ -52,7 +63,12 @@ program
       sandbox.serverPort === sandbox.bridgePort
     )
       throw new Error("Invalid sandbox ports")
-    await startRuntime({ command: options.command, startupTimeout: positiveInteger(options.startupTimeout), sandbox })
+    await startRuntime({
+      command: options.command,
+      startupTimeout: positiveInteger(options.startupTimeout),
+      sandbox,
+      ...(sandbox.cloudBrowser ? { headless: true, browser: sandbox.browserPath } : {})
+    })
   })
 program
   .command("start")
@@ -145,6 +161,17 @@ program
     )
       throw new Error("Browser ownership options are managed by the runtime")
     const port = new URL(session.cdpUrl).port
+    if (args[0] === "metrics") {
+      return print(
+        await captureBrowserMetrics(args.slice(1), (command) =>
+          runSandboxCli(
+            getAgentBrowserBinaryPath(),
+            ["--session", `d3k-${session.sessionId}`, "--cdp", port, ...command],
+            { timeoutMs: 30000 }
+          )
+        )
+      )
+    }
     await new Promise<void>((resolveRun, reject) => {
       const child = spawn(
         getAgentBrowserBinaryPath(),
@@ -152,7 +179,11 @@ program
         { stdio: "inherit" }
       )
       child.on("error", reject)
-      child.on("exit", (code) => (code !== 0 ? reject(new Error(`agent-browser exited ${code}`)) : resolveRun()))
+      child.on("exit", (code, signal) =>
+        code !== 0
+          ? reject(new Error(`agent-browser ${signal ? `terminated by ${signal}` : `exited ${code}`}`))
+          : resolveRun()
+      )
     })
   })
 const portless = program.command("portless").description("Prepare canonical local HTTPS")

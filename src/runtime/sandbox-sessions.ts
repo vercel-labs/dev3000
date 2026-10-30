@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto"
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { join } from "node:path"
-import { HARNESS_NAMES, type Harness } from "./harness.js"
+import { isAbsolute, join } from "node:path"
+import { HARNESS_LOCATIONS, HARNESS_NAMES, type Harness, type HarnessLocation } from "./harness.js"
 
 export interface SandboxSession {
   version: 1
@@ -20,7 +20,11 @@ export interface SandboxSession {
   installCommand?: string
   timeout: string
   harness?: Harness
+  harnessLocation?: HarnessLocation
+  fxWorkspace?: string
   fx: boolean
+  gateway?: boolean
+  gatewayBudget?: string
   ownsSandbox: boolean
   createdAt: string
   lastUsedAt: string
@@ -37,6 +41,7 @@ function validSession(value: unknown): value is SandboxSession {
   return (
     record.version === 1 &&
     (record.harness === undefined || HARNESS_NAMES.includes(record.harness)) &&
+    (record.harnessLocation === undefined || HARNESS_LOCATIONS.includes(record.harnessLocation)) &&
     typeof record.id === "string" &&
     isId(record.id) &&
     [
@@ -52,12 +57,27 @@ function validSession(value: unknown): value is SandboxSession {
       record.lastUsedAt
     ].every((value) => typeof value === "string" && !!value) &&
     typeof record.fx === "boolean" &&
+    (record.fxWorkspace === undefined ||
+      (typeof record.fxWorkspace === "string" &&
+        isAbsolute(record.fxWorkspace) &&
+        !record.fxWorkspace.includes("\0"))) &&
+    (record.gateway === undefined || typeof record.gateway === "boolean") &&
+    (record.gatewayBudget === undefined ||
+      (typeof record.gatewayBudget === "string" &&
+        Number.isFinite(Number(record.gatewayBudget)) &&
+        Number(record.gatewayBudget) >= 1)) &&
     typeof record.ownsSandbox === "boolean" &&
     [record.scope, record.branch, record.command, record.installCommand, record.closedAt].every(
       (value) => value === undefined || typeof value === "string"
     ) &&
     (record.launcherPid === undefined || (Number.isSafeInteger(record.launcherPid) && record.launcherPid > 0))
   )
+}
+
+/** Keep fx's workspace identity stable; its own profile owns conversation history. */
+export function sandboxFxWorkspace(record: SandboxSession, directory = sandboxSessionsDirectory()): string {
+  if (!isId(record.id)) throw new Error("Invalid sandbox session ID")
+  return record.fxWorkspace || join(directory, "workspaces", record.id)
 }
 
 export function readSandboxSession(id: string, directory = sandboxSessionsDirectory()): SandboxSession {

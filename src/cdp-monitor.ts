@@ -5,6 +5,7 @@ import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { WebSocket } from "ws"
 import { isolatedChromeInvocation } from "./runtime/chrome-isolation.js"
+import { NETWORK_RESOURCE_LIMIT } from "./runtime/network-evidence.js"
 
 /** Sandbox exceptions must be explicit; headless mode alone never disables it. */
 export function getChromeSandboxFlags(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -322,6 +323,12 @@ export class CDPMonitor {
 
   setEventObserver(observer: (event: CDPEvent) => void): void {
     this.eventObserver = observer
+  }
+
+  async readResponseBody(requestId: string): Promise<{ body: string; base64Encoded: boolean }> {
+    const result = await this.sendCDPCommand("Network.getResponseBody", { requestId }, 3000)
+    if (typeof result.body !== "string") throw new Error("Response body unavailable")
+    return { body: result.body, base64Encoded: result.base64Encoded === true }
   }
 
   private browser: ChildProcess | null = null
@@ -1132,6 +1139,17 @@ export class CDPMonitor {
     }
   }
 
+  async setSessionCookie(cookie: { name: string; value: string; url: string; expires: number }): Promise<void> {
+    const result = await this.sendCDPCommand("Network.setCookie", {
+      ...cookie,
+      path: "/",
+      secure: true,
+      httpOnly: true,
+      sameSite: "Lax"
+    })
+    if (result.success === false) throw new Error("Could not authorize the browser's preview session")
+  }
+
   private async sendCDPCommand(
     method: string,
     params: Record<string, unknown> = {},
@@ -1278,7 +1296,17 @@ export class CDPMonitor {
     for (const domain of domains) {
       try {
         this.debugLog(`Enabling CDP domain: ${domain.name}`)
-        await this.sendCDPCommand(`${domain.name}.enable`, {}, 3000)
+        await this.sendCDPCommand(
+          `${domain.name}.enable`,
+          domain.name === "Network"
+            ? {
+                maxTotalBufferSize: 1024 * 1024,
+                maxResourceBufferSize: NETWORK_RESOURCE_LIMIT,
+                maxPostDataSize: NETWORK_RESOURCE_LIMIT
+              }
+            : {},
+          3000
+        )
         this.debugLog(`Successfully enabled CDP domain: ${domain.name}`)
         if (this.debug) {
           this.logger("browser", `[CDP] Enabled ${domain.name} domain`)
@@ -2344,7 +2372,7 @@ export class CDPMonitor {
       if (!browserClosedCleanly) {
         try {
           // Try to close the page
-          await this.sendCDPCommand("Page.close")
+          await this.sendCDPCommand("Page.close", {}, 1000)
           this.debugLog("Sent Page.close command")
           await new Promise((resolve) => setTimeout(resolve, 100))
         } catch (_e) {
@@ -2353,7 +2381,7 @@ export class CDPMonitor {
 
         try {
           // Get the list of targets to find our specific tab
-          const targets = (await this.sendCDPCommand("Target.getTargets")) as {
+          const targets = (await this.sendCDPCommand("Target.getTargets", {}, 1000)) as {
             targetInfos: Array<{ targetId: string; type: string }>
           }
           this.debugLog(`Found ${targets.targetInfos?.length || 0} targets`)
@@ -2362,9 +2390,13 @@ export class CDPMonitor {
           const pageTarget = targets.targetInfos?.find((t) => t.type === "page")
           if (pageTarget) {
             this.debugLog(`Closing page target: ${pageTarget.targetId}`)
-            await this.sendCDPCommand("Target.closeTarget", {
-              targetId: pageTarget.targetId
-            })
+            await this.sendCDPCommand(
+              "Target.closeTarget",
+              {
+                targetId: pageTarget.targetId
+              },
+              1000
+            )
             this.debugLog("Closed Chrome tab via CDP")
           }
 

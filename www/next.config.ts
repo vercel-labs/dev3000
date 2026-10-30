@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   compress: process.env.NODE_ENV === "production",
   outputFileTracingRoot: path.join(currentDir, ".."),
+  outputFileTracingIncludes: {
+    "/mcp": ["./hosted-runtime/dev3000.tgz"]
+  },
   turbopack: {
     root: path.join(currentDir, "..")
   }

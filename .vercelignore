@@ -1,0 +1,7 @@
+# Obsolete generated Workflow routes can survive an older local checkout.
+www/app/.well-known/workflow/
+
+# Runtime artifacts are rebuilt from source during deployment.
+www/hosted-runtime/
+dist/
+*.tgz

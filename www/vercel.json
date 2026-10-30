@@ -1,4 +1,4 @@
 {
-  "buildCommand": "bun run build",
+  "buildCommand": "cd .. && bun run build && mkdir -p www/hosted-runtime && bun pm pack --filename www/hosted-runtime/dev3000.tgz --quiet && cd www && next build",
   "installCommand": "cd .. && bun install"
 }

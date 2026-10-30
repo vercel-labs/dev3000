@@ -30,6 +30,10 @@ describe("sandbox project selection", () => {
       expect(() => resolveSandboxOptions({ project: "team/songbook-studio", hostname })).toThrow("--hostname")
   })
 
+  it.each(["0", "NaN", "Infinity", "-1"])("rejects invalid Gateway budget %s before provisioning", (gatewayBudget) => {
+    expect(() => resolveSandboxOptions({ project: "team/project", gatewayBudget })).toThrow("--gateway-budget")
+  })
+
   it.each(["", "sandbox"])("parses the same shell/fx defaults for prefix %j", async (subcommand) => {
     const prefix = subcommand ? [subcommand] : []
     const program = new Command().exitOverride()
@@ -46,13 +50,27 @@ describe("sandbox project selection", () => {
     expect(result).toMatchObject({
       project: "cranio-mom",
       scope: "elsigh-pro",
+      timeout: "60",
+      harnessLocation: "local",
       shell: true,
       fx: true,
       command: "bun run dev"
     })
-    await program.parseAsync([...prefix, "--project", "elsigh-pro/cranio-mom", "--no-shell", "--no-fx"], {
-      from: "user"
-    })
-    expect(result).toMatchObject({ shell: false, fx: false })
+    await program.parseAsync(
+      [...prefix, "--project", "elsigh-pro/cranio-mom", "--no-shell", "--no-fx", "--timeout", "15"],
+      {
+        from: "user"
+      }
+    )
+    expect(result).toMatchObject({ shell: false, fx: false, timeout: "15" })
+  })
+
+  it("accepts the explicit remote location and rejects arbitrary locations", () => {
+    expect(
+      resolveSandboxOptions({ project: "team/project", harness: "fx", harnessLocation: "sandbox" }).harnessLocation
+    ).toBe("sandbox")
+    expect(() => resolveSandboxOptions({ project: "team/project", harnessLocation: "somewhere" as "local" })).toThrow(
+      "harness location"
+    )
   })
 })

@@ -16,8 +16,9 @@ import {
 } from "../portless.js"
 import { getPortlessName } from "../utils/project-name.js"
 import { startBridge } from "./bridge.js"
-import { recordBrowserEvent } from "./browser-events.js"
+import { createBrowserEventRecorder } from "./browser-events.js"
 import { type Harness, launchLocalHarness, parseHarness } from "./harness.js"
+import type { SandboxPreview } from "./sandbox-preview.js"
 import { startSandboxProxy } from "./sandbox-proxy.js"
 import { queryRuntime, type RuntimeSession, readRuntimeSession, runtimePaths } from "./session.js"
 import { type EventLevel, type EventSource, Timeline } from "./timeline.js"
@@ -48,7 +49,16 @@ export interface RuntimeOptions {
   profileDir?: string
   debug?: boolean
   /** Sandbox mode uses the companion’s stable local HTTPS origin; only the companion needs Portless. */
-  sandbox?: { appUrl: string; serverPort: number; bridgePort: number; token: string; proxyToken?: string }
+  sandbox?: {
+    appUrl: string
+    serverPort: number
+    bridgePort: number
+    token: string
+    proxyToken?: string
+    preview?: SandboxPreview
+    cloudBrowser?: boolean
+    browserPath?: string
+  }
 }
 
 async function freePort(): Promise<number> {
@@ -273,25 +283,27 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
         port: options.sandbox.serverPort,
         targetPort: serverPort,
         appUrl: session.appUrl,
-        token: options.sandbox.proxyToken
+        token: options.sandbox.proxyToken,
+        preview: options.sandbox.preview
       })
-      bridge = await startBridge({
-        token: options.sandbox.token,
-        port: options.sandbox.bridgePort,
-        onState: (connected) => {
-          log(
-            "browser-bridge",
-            connected
-              ? "Local browser companion connected"
-              : "Browser bridge disconnected; evidence gap until reattached",
-            connected ? "info" : "warn"
-          )
-          if (connected && session.ready && !closing)
-            void monitor?.recoverExternalConnection().catch((error) => {
-              log("browser-recovery", `Could not restore browser monitoring: ${String(error)}`, "warn")
-            })
-        }
-      })
+      if (!options.sandbox.cloudBrowser)
+        bridge = await startBridge({
+          token: options.sandbox.token,
+          port: options.sandbox.bridgePort,
+          onState: (connected) => {
+            log(
+              "browser-bridge",
+              connected
+                ? "Local browser companion connected"
+                : "Browser bridge disconnected; evidence gap until reattached",
+              connected ? "info" : "warn"
+            )
+            if (connected && session.ready && !closing)
+              void monitor?.recoverExternalConnection().catch((error) => {
+                log("browser-recovery", `Could not restore browser monitoring: ${String(error)}`, "warn")
+              })
+          }
+        })
     }
     log("starting", `Starting ${command}`)
     child = spawn(portless ? buildPortlessServerCommand(portless, command, { customCommand: true }) : command, {
@@ -387,7 +399,12 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
         undefined,
         bridge?.cdpBase
       )
-      monitor.setEventObserver((event) => recordBrowserEvent(timeline, event))
+      monitor.setEventObserver(
+        createBrowserEventRecorder(timeline, {
+          appUrl: session.appUrl,
+          readResponseBody: monitor.readResponseBody.bind(monitor)
+        })
+      )
       monitor.setOnWindowClosedCallback(() => {
         void shutdown()
       })
@@ -396,6 +413,13 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
         await monitor.shutdown()
         return
       }
+      if (options.sandbox?.cloudBrowser && options.sandbox.preview)
+        await monitor.setSessionCookie({
+          name: "__Host-d3k-preview",
+          value: options.sandbox.preview.token,
+          url: options.sandbox.preview.origin,
+          expires: Math.floor(options.sandbox.preview.expiresAt / 1000)
+        })
       await monitor.navigateToUrl(session.appUrl)
       session.cdpUrl = monitor.getCdpUrl()
     }

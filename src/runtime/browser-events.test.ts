@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { recordBrowserEvent } from "./browser-events.js"
+import { createBrowserEventRecorder } from "./browser-events.js"
 import { Timeline } from "./timeline.js"
 
 describe("CDP evidence", () => {
-  it("correlates network events without retaining credentials or bodies", () => {
+  it("correlates network events with redacted headers and unsupported body omission", () => {
     const timeline = new Timeline()
-    recordBrowserEvent(timeline, {
+    const record = createBrowserEventRecorder(timeline, {
+      appUrl: "https://app.localhost",
+      readResponseBody: async () => ({ body: "", base64Encoded: false })
+    })
+    record({
       method: "Network.requestWillBeSent",
       timestamp: 1,
       params: {
@@ -18,7 +22,7 @@ describe("CDP evidence", () => {
         }
       }
     })
-    recordBrowserEvent(timeline, {
+    record({
       method: "Network.responseReceived",
       timestamp: 2,
       params: { requestId: "r1", response: { url: "https://app.localhost/path?token=secret", status: 500 } }
@@ -27,13 +31,16 @@ describe("CDP evidence", () => {
     expect(result.events.map((e) => e.data?.requestId)).toEqual(["r1", "r1"])
     expect(result.events[1].level).toBe("error")
     const serialized = JSON.stringify(result)
-    for (const secret of ["password", "secret", "private body", "authorization"])
-      expect(serialized).not.toContain(secret)
+    for (const secret of ["password", "secret", "private body"]) expect(serialized).not.toContain(secret)
   })
 
   it("retains exception and console context with falsy arguments", () => {
     const timeline = new Timeline()
-    recordBrowserEvent(timeline, {
+    const record = createBrowserEventRecorder(timeline, {
+      appUrl: "https://app.localhost",
+      readResponseBody: async () => ({ body: "", base64Encoded: false })
+    })
+    record({
       method: "Runtime.consoleAPICalled",
       timestamp: 1,
       params: {
@@ -42,7 +49,7 @@ describe("CDP evidence", () => {
         stackTrace: { callFrames: [{ functionName: "save" }] }
       }
     })
-    recordBrowserEvent(timeline, {
+    record({
       method: "Runtime.exceptionThrown",
       timestamp: 2,
       params: { exceptionDetails: { text: "Uncaught", exception: { description: "Error: broken" }, url: "app.js" } }
