@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.191] - 2026-11-06
+
+**Patch Release**
+
+- Keep macOS Chrome startup inside its isolated profile
+
 ## [0.0.190] - 2026-11-06
 
 **Feature Release**
