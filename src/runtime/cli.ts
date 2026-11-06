@@ -6,6 +6,7 @@ import { getPortlessProxyStatus, installPortlessService } from "../portless.js"
 import { getAgentBrowserBinaryPath } from "../utils/agent-browser.js"
 import { captureBrowserMetrics } from "./browser-metrics.js"
 import { readRecentEvents, selectEventView } from "./event-views.js"
+import { publishGithub } from "./github-publish.js"
 import { parseHarness } from "./harness.js"
 import { startRuntime } from "./runtime.js"
 import { addSandboxProjectOptions, registerSandboxCommand, runSandboxProject } from "./sandbox-command.js"
@@ -99,6 +100,29 @@ program
   .action(async () => {
     if (!readRuntimeSession()) return print({ running: false, ready: false })
     print(await queryRuntime("/status"))
+  })
+program
+  .command("publish")
+  .description("Publish the committed feature branch and open a draft PR using laptop GitHub authentication")
+  .requiredOption("--base <branch>", "PR base branch")
+  .requiredOption("--title <title>", "PR title")
+  .requiredOption("--body-file <path>", "Read the PR description from a UTF-8 file")
+  .action(async (options) => {
+    print(
+      await publishGithub({
+        cwd: process.cwd(),
+        base: options.base,
+        title: options.title,
+        body: readFileSync(options.bodyFile, "utf8"),
+        api: (method, path, body) =>
+          queryRuntime(
+            "/github",
+            process.cwd(),
+            "POST",
+            JSON.stringify({ method, path, ...(body === undefined ? {} : { body }) })
+          )
+      })
+    )
   })
 program
   .command("github <method> <path>")

@@ -9,7 +9,8 @@ for (const [entry, args] of [
   ["d3k-runtime", ["--help"]],
   ["d3k", ["start", "--help"]],
   ["dev3000", ["sandbox", "--help"]],
-  ["d3k", ["mcp", "--help"]]
+  ["d3k", ["mcp", "--help"]],
+  ["d3k", ["publish", "--help"]]
 ] as const) {
   const result = spawnSync(join(homedir(), ".bun", "bin", entry), args, { encoding: "utf8" })
   if (result.status !== 0 || !result.stdout.trim()) throw new Error(`${entry} smoke test failed: ${result.stderr}`)

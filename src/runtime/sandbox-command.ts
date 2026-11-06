@@ -36,7 +36,7 @@ export function addSandboxProjectOptions(command: Command): Command {
     .option("--no-shell", "Keep the companion running without opening an interactive remote shell")
     .option("--no-fx", "Skip fx installation")
     .option("--no-gateway", "Skip automatic session Gateway credentials for sandbox fx")
-    .option("--gateway-budget <usd>", "Gateway spending limit for this sandbox shell session (USD)", "5")
+    .option("--gateway-budget <usd|none>", "Gateway spending limit (Eve defaults to none; fx defaults to 5 USD)")
 }
 
 export function resolveSandboxOptions(options: SandboxOptions): SandboxOptions {
@@ -46,7 +46,7 @@ export function resolveSandboxOptions(options: SandboxOptions): SandboxOptions {
     if (options.harnessLocation === "sandbox")
       throw new Error("Eve runs remotely with a local client; omit --harness-location")
     if (options.gateway === false)
-      throw new Error("The Eve harness requires its bounded Gateway key; omit --no-gateway")
+      throw new Error("The Eve harness requires its project-scoped Gateway key; omit --no-gateway")
   }
   if (options.harness && options.shell === false) throw new Error("--harness cannot be combined with --no-shell")
   if (!options.project) throw new Error("Specify --project <team/project-or-id>")
@@ -60,11 +60,21 @@ export function resolveSandboxOptions(options: SandboxOptions): SandboxOptions {
   const minutes = Number(options.timeout ?? DEFAULT_SANDBOX_TIMEOUT_MINUTES)
   if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440)
     throw new Error("Sandbox timeout must be 1–1440 minutes")
-  const budget = Number(options.gatewayBudget ?? 5)
-  if (!Number.isFinite(budget) || budget < 1) throw new Error("--gateway-budget must be at least 1 USD")
+  const gatewayBudget = options.gatewayBudget ?? (options.harness === "eve" ? undefined : "5")
+  if (
+    gatewayBudget !== undefined &&
+    gatewayBudget !== "none" &&
+    (!Number.isFinite(Number(gatewayBudget)) || Number(gatewayBudget) < 1)
+  )
+    throw new Error("--gateway-budget must be at least 1 USD or none")
   if (options.attach && (options.branch || options.name))
     throw new Error("--attach uses the existing checkout; omit --branch and --name")
-  return { ...options, project: parts[parts.length - 1], scope: parts.length === 2 ? parts[0] : options.scope }
+  return {
+    ...options,
+    gatewayBudget,
+    project: parts[parts.length - 1],
+    scope: parts.length === 2 ? parts[0] : options.scope
+  }
 }
 
 export function resolveSandboxResume(options: Partial<SandboxOptions>): SandboxOptions | undefined {
@@ -98,7 +108,8 @@ export function resolveSandboxResume(options: Partial<SandboxOptions>): SandboxO
     harness: options.shell === false && options.harness === undefined ? undefined : record.harness,
     harnessLocation: record.harnessLocation,
     gateway: record.gateway,
-    gatewayBudget: record.gatewayBudget,
+    // Older Eve launchers saved the fx default here but ignored it, using a hardcoded $1 cap.
+    gatewayBudget: record.harness === "eve" && !record.gatewayBudgetConfigured ? undefined : record.gatewayBudget,
     ...options
   } as SandboxOptions)
 }

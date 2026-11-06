@@ -30,6 +30,17 @@ describe("sandbox project selection", () => {
       expect(() => resolveSandboxOptions({ project: "team/songbook-studio", hostname })).toThrow("--hostname")
   })
 
+  it("defaults Eve to no spending cap and honors explicit budgets or none", () => {
+    expect(resolveSandboxOptions({ project: "team/project", harness: "eve" }).gatewayBudget).toBeUndefined()
+    expect(resolveSandboxOptions({ project: "team/project", harness: "eve", gatewayBudget: "20" }).gatewayBudget).toBe(
+      "20"
+    )
+    expect(
+      resolveSandboxOptions({ project: "team/project", harness: "eve", gatewayBudget: "none" }).gatewayBudget
+    ).toBe("none")
+    expect(resolveSandboxOptions({ project: "team/project", harness: "fx" }).gatewayBudget).toBe("5")
+  })
+
   it.each(["0", "NaN", "Infinity", "-1"])("rejects invalid Gateway budget %s before provisioning", (gatewayBudget) => {
     expect(() => resolveSandboxOptions({ project: "team/project", gatewayBudget })).toThrow("--gateway-budget")
   })

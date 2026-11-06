@@ -3,8 +3,10 @@ type Run = (binary: string, args: string[], options?: { input?: string }) => Pro
 /** The CLI authenticates locally. Only this purpose/project-restricted key goes into the VM. */
 export async function createSandboxGateway(
   run: Run,
-  options: { projectId: string; teamId: string; sessionId: string; minutes: number; budget: number }
+  options: { projectId: string; teamId: string; sessionId: string; minutes: number; budget?: number }
 ) {
+  if (options.budget !== undefined && (!Number.isFinite(options.budget) || options.budget < 1))
+    throw new Error("Gateway budget must be at least 1 USD")
   const expiresAt = Date.now() + options.minutes * 60000
   const result = JSON.parse(
     await run(
@@ -16,7 +18,9 @@ export async function createSandboxGateway(
           projectId: options.projectId,
           name: `d3k ${options.sessionId}`,
           expiresAt,
-          aiGatewayQuota: { limitAmount: options.budget, refreshPeriod: "none", includeByokInQuota: true }
+          ...(options.budget === undefined
+            ? {}
+            : { aiGatewayQuota: { limitAmount: options.budget, refreshPeriod: "none", includeByokInQuota: true } })
         })
       }
     )

@@ -29,23 +29,24 @@ the companion reconnects. Do not launch another browser as a fallback.
 
 A user request for a PR authorizes committing the intended changes, publishing
 a feature branch and opening a draft PR without another confirmation. Follow the
-shared d3k Pull requests workflow below. Commit in this checkout. Existing
-managed Git authentication may support normal git push. If remote Git/gh is not
-authenticated, use d3k's laptop-authenticated publishing route before declaring
-the task blocked. Do not ask for a token or run gh auth login in the sandbox.
-From the project root, call:
-`/tmp/d3k-tools/node_modules/.bin/d3k-runtime github GET /git/ref/heads/main`
-The method is GET, POST, or PATCH; the path is relative to the linked repository.
-For JSON bodies, pipe JSON into the same command with `--input -`.
-Use /git/blobs, /git/trees, /git/commits and /git/refs to publish the remote
-commit, then POST /pulls with {title, head, base, body, draft:true}. Preserve
-author, committer, timestamps, parent SHAs and tree entries; confirm the returned
-commit SHA matches the remote commit before updating the branch ref. Do not
-force-push. Check the actual base branch rather than assuming main. A failed
-remote gh auth check does not establish that this publishing route is unavailable.
-GitHub credentials stay on the laptop. If the companion disconnects, publishing
-waits until it reconnects. On a timeout, inspect GitHub state before retrying;
-never automatically replay a mutation that may have succeeded.
+shared d3k Pull requests workflow below. Commit in this checkout. d3k supplies
+and persists the user's configured Git identity in this repository. Check
+`git var GIT_AUTHOR_IDENT` and `git var GIT_COMMITTER_IDENT` before reporting a
+missing identity: Git also accepts environment-supplied author/committer values,
+so empty `git config user.name` or `user.email` alone is not a blocker. If the
+effective identities are available, commit without asking the user to repeat them.
+After committing the intended files on a feature branch, publish from the project root:
+`/tmp/d3k-tools/node_modules/.bin/d3k-runtime publish --base main --title "Describe the change" --body-file /tmp/pr-body.md`
+Use the actual base branch and write the PR description file remotely first.
+This command uploads the committed objects, preserves exact message newlines and
+timestamps, verifies SHAs before updating the branch, and creates a draft PR or
+returns the existing open PR. Do not construct Git Data API requests manually or
+try an unauthenticated push first. Untracked files and unstaged changes stay out.
+GitHub credentials stay on the laptop; publishing requires its connected companion.
+On a timeout, rerun the same publisher: it checks GitHub state before writing and
+recovers successful ref/PR writes whose responses were lost. Never force-push,
+ask for tokens or run gh auth login in the sandbox. Report a concrete unsupported
+object or authentication error instead of guessing at commit metadata.
 
 Read the checkout's AGENTS.md before changing project code. Perform external
 side effects when the user requests them; ask if authorization is missing.

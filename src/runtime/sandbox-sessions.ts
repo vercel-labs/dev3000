@@ -25,6 +25,7 @@ export interface SandboxSession {
   fx: boolean
   gateway?: boolean
   gatewayBudget?: string
+  gatewayBudgetConfigured?: boolean
   ownsSandbox: boolean
   createdAt: string
   lastUsedAt: string
@@ -62,7 +63,9 @@ function validSession(value: unknown): value is SandboxSession {
         isAbsolute(record.fxWorkspace) &&
         !record.fxWorkspace.includes("\0"))) &&
     (record.gateway === undefined || typeof record.gateway === "boolean") &&
+    (record.gatewayBudgetConfigured === undefined || typeof record.gatewayBudgetConfigured === "boolean") &&
     (record.gatewayBudget === undefined ||
+      record.gatewayBudget === "none" ||
       (typeof record.gatewayBudget === "string" &&
         Number.isFinite(Number(record.gatewayBudget)) &&
         Number(record.gatewayBudget) >= 1)) &&

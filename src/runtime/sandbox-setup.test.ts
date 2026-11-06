@@ -1,0 +1,53 @@
+import { execFileSync, spawnSync } from "node:child_process"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { afterEach, describe, expect, it } from "vitest"
+import { dependencyCacheScript, distributionFingerprint } from "./sandbox-setup"
+
+const directories: string[] = []
+function fixture() {
+  const root = mkdtempSync(join(tmpdir(), "d3k-setup-"))
+  directories.push(root)
+  execFileSync("git", ["init", "--quiet", root])
+  writeFileSync(join(root, ".gitignore"), "node_modules/\nsetup.sha256\n")
+  mkdirSync(join(root, "node_modules"))
+  writeFileSync(join(root, "package.json"), '{"dependencies":{"example":"1"}}')
+  const run = (mode: string, seed = "bun install") =>
+    spawnSync(process.execPath, ["-e", dependencyCacheScript, mode, join(root, "setup.sha256"), seed], { cwd: root })
+  return { root, run }
+}
+afterEach(() => {
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
+})
+
+describe("sandbox setup reuse", () => {
+  it("reuses successful installs, but invalidates workspace edits, locks, settings and missing dependencies", () => {
+    const { root, run } = fixture()
+    expect(run("check").status).toBe(10)
+    expect(run("save").status).toBe(0)
+    expect(run("check").status).toBe(0)
+    writeFileSync(join(root, "app.ts"), "// coding changes do not require installation")
+    expect(run("check").status).toBe(0)
+    mkdirSync(join(root, "packages", "child"), { recursive: true })
+    writeFileSync(join(root, "packages", "child", "package.json"), '{"name":"child"}')
+    expect(run("check").status).toBe(10)
+    expect(run("save").status).toBe(0)
+    writeFileSync(join(root, "bun.lock"), "changed lockfile")
+    expect(run("check").status).toBe(10)
+    expect(run("save").status).toBe(0)
+    expect(run("check", "different command or environment").status).toBe(10)
+    rmSync(join(root, "node_modules"), { recursive: true })
+    expect(run("check").status).toBe(10)
+  })
+  it("hashes actual runtime contents even when the package version is unchanged", () => {
+    const { root } = fixture()
+    for (const directory of ["bin", "dist", "scripts/eve", "skills/d3k"])
+      mkdirSync(join(root, directory), { recursive: true })
+    writeFileSync(join(root, "dist", "cli.js"), "version one")
+    const before = distributionFingerprint(root)
+    expect(distributionFingerprint(root)).toBe(before)
+    writeFileSync(join(root, "dist", "cli.js"), "version two")
+    expect(distributionFingerprint(root)).not.toBe(before)
+  })
+})

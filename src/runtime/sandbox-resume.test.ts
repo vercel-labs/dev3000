@@ -96,6 +96,30 @@ describe("sandbox resume CLI", () => {
       })
     )
   })
+  it("drops legacy ignored Eve budgets, retains new explicit caps and allows clearing them", async () => {
+    const original = Object.getOwnPropertyDescriptor(process.stdin, "isTTY")
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true })
+    try {
+      vi.mocked(readSandboxSession).mockReturnValue({ ...record, harness: "eve", gatewayBudget: "5" })
+      await parse(["--resume", record.id])
+      expect(launchSandbox).toHaveBeenLastCalledWith(
+        expect.objectContaining({ harness: "eve", gatewayBudget: undefined })
+      )
+      vi.mocked(readSandboxSession).mockReturnValue({
+        ...record,
+        harness: "eve",
+        gatewayBudget: "20",
+        gatewayBudgetConfigured: true
+      })
+      await parse(["--resume", record.id])
+      expect(launchSandbox).toHaveBeenLastCalledWith(expect.objectContaining({ gatewayBudget: "20" }))
+      await parse(["--resume", record.id, "--gateway-budget", "none"])
+      expect(launchSandbox).toHaveBeenLastCalledWith(expect.objectContaining({ gatewayBudget: "none" }))
+    } finally {
+      if (original) Object.defineProperty(process.stdin, "isTTY", original)
+      else delete (process.stdin as { isTTY?: boolean }).isTTY
+    }
+  })
   it("allows explicit command and lifecycle overrides", async () => {
     await parse(["sandbox", "--resume", record.id, "--no-shell", "--timeout", "45", "--command", "bun run dev"])
     expect(launchSandbox).toHaveBeenCalledWith(

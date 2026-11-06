@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { eveClient, imageAttachment, pendingInteractions } from "./client.mjs"
 import { connect } from "./connection.mjs"
+import { openEveConversation, saveEveConversationScript } from "./conversation.mjs"
 import { EVE_INSTALL_CONFIG, EVE_MODEL, EVE_VERSION, MODEL_HEADER } from "./settings.mjs"
 
 const source = dirname(fileURLToPath(import.meta.url))
@@ -197,6 +198,39 @@ try {
     release()
   }
   console.log("PASS: command finished after client exit; same conversation replayed with one admitted prompt")
+
+  const savedConversationFile = join(root, ".d3k-conversation.json")
+  const remembered = await openEveConversation({
+    client,
+    owner: "fixture",
+    workdir: workspace,
+    save: async (state) => {
+      await run(process.execPath, ["-e", saveEveConversationScript, root, JSON.stringify(state)])
+    }
+  })
+  const remember = await remembered.send("remember-case: keep the Education rewrite in mind")
+  assert.equal((await remember.result({ signal: AbortSignal.timeout(20000) })).reply, "HISTORY_PRESENT")
+  // A full launcher exit stops the service. Rebuild too, as a CLI upgrade would.
+  await stopServer()
+  await run(process.execPath, [eve, "build"])
+  await startServer()
+  const savedConversation = JSON.parse(await readFile(savedConversationFile, "utf8"))
+  const reopened = await openEveConversation({
+    client: new Client({ baseUrl, auth: { bearer: token } }),
+    state: savedConversation,
+    owner: "fixture",
+    workdir: workspace,
+    save: () => {
+      throw new Error("Resume must not create a conversation")
+    },
+    signal: AbortSignal.timeout(20000)
+  })
+  assert.equal(reopened.id, remembered.id)
+  const recall = await reopened.send("recall-case: what were we working on?")
+  assert.equal((await recall.result({ signal: AbortSignal.timeout(20000) })).reply, "HISTORY_PRESENT")
+  const emptyRecall = await client.sessions.create({ message: "recall-case: what were we working on?" })
+  assert.equal((await emptyRecall.delivery.result({ signal: AbortSignal.timeout(20000) })).reply, "HISTORY_MISSING")
+  console.log("PASS: saved conversation survived service stop, rebuild and restart; model sees earlier history")
 
   const approval = await client.sessions.create({ message: "approval-case" })
   const waiting = await approval.delivery.result({ signal: AbortSignal.timeout(20000) })

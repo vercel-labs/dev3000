@@ -42,6 +42,7 @@ import {
   sandboxFxWorkspace,
   saveSandboxSession
 } from "./sandbox-sessions.js"
+import { dependencyCacheScript, distributionFingerprint } from "./sandbox-setup.js"
 import { runSandboxShell, SandboxShellDisconnected } from "./sandbox-shell.js"
 import { watchSandboxRuntime } from "./sandbox-watch.js"
 import { finishTerminalCleanup, holdTerminalForCleanup } from "./terminal.js"
@@ -250,20 +251,38 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
     const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
     if (!existsSync(join(packageRoot, "dist/runtime/cli.js")))
       throw new Error("Build d3k before starting a sandbox from a source checkout")
-    const archive = join(temporary, "dev3000.tgz")
-    await run("bun", ["pm", "pack", "--filename", archive, "--quiet"], { cwd: packageRoot })
-    const mkdirResult = await sandbox.runCommand("mkdir", ["-p", REMOTE_TOOLS])
-    if (mkdirResult.exitCode !== 0) throw new Error("Could not prepare remote d3k tools directory")
-    await sandbox.writeFiles([{ path: `${REMOTE_TOOLS}/dev3000.tgz`, content: readFileSync(archive) }])
-    log("Installing d3k in the sandbox")
-    const installTools = await sandbox.runCommand({
-      cmd: "bun",
-      args: ["add", "--cwd", REMOTE_TOOLS, `${REMOTE_TOOLS}/dev3000.tgz`],
-      timeoutMs: 180000,
-      signal: shellAbort.signal
+    const distribution = distributionFingerprint(packageRoot)
+    const distributionMarker = `${REMOTE_TOOLS}/distribution.sha256`
+    const cachedTools = await sandbox.runCommand({
+      cmd: "node",
+      args: [
+        "-e",
+        "const fs=require('node:fs');const [marker,hash,entry]=process.argv.slice(1);process.exit(fs.existsSync(entry)&&fs.existsSync(marker)&&fs.readFileSync(marker,'utf8')===hash?0:10)",
+        distributionMarker,
+        distribution,
+        REMOTE_ENTRY
+      ]
     })
-    if (installTools.exitCode !== 0)
-      throw new Error(`Remote d3k install failed: ${(await installTools.stderr()).slice(-4000)}`)
+    if (cachedTools.exitCode === 0) log("Reusing installed sandbox d3k (unchanged distribution)")
+    else {
+      const archive = join(temporary, "dev3000.tgz")
+      await run("bun", ["pm", "pack", "--filename", archive, "--quiet"], { cwd: packageRoot })
+      const mkdirResult = await sandbox.runCommand("mkdir", ["-p", REMOTE_TOOLS])
+      if (mkdirResult.exitCode !== 0) throw new Error("Could not prepare remote d3k tools directory")
+      const invalidated = await sandbox.runCommand("rm", ["-f", distributionMarker])
+      if (invalidated.exitCode !== 0) throw new Error("Could not invalidate the remote d3k install marker")
+      await sandbox.writeFiles([{ path: `${REMOTE_TOOLS}/dev3000.tgz`, content: readFileSync(archive) }])
+      log("Installing d3k in the sandbox (distribution changed or missing)")
+      const installTools = await sandbox.runCommand({
+        cmd: "bun",
+        args: ["add", "--cwd", REMOTE_TOOLS, `${REMOTE_TOOLS}/dev3000.tgz`],
+        timeoutMs: 180000,
+        signal: shellAbort.signal
+      })
+      if (installTools.exitCode !== 0)
+        throw new Error(`Remote d3k install failed: ${(await installTools.stderr()).slice(-4000)}`)
+      await sandbox.writeFiles([{ path: distributionMarker, content: Buffer.from(distribution) }])
+    }
     const existing = await sandbox.runCommand({ cmd: "node", args: [REMOTE_ENTRY, "status"], cwd: workdir })
     if (existing.exitCode === 0 && JSON.parse(await existing.stdout()).running) {
       if (typeof options.resume !== "string")
@@ -335,7 +354,8 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
       timeout: String(timeoutMinutes),
       fx: options.fx !== false,
       gateway: options.gateway !== false,
-      gatewayBudget: options.gatewayBudget || "5",
+      gatewayBudget: options.gatewayBudget,
+      gatewayBudgetConfigured: true,
       harness: options.harness,
       harnessLocation: options.harnessLocation || "local",
       fxWorkspace,
@@ -370,17 +390,39 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
     })
     if (legacyCleanup.exitCode !== 0) throw new Error("Could not remove legacy sandbox harness credentials")
     const setup = options.installCommand || project.installCommand || "bun install"
-    log(`Installing project dependencies: ${setup}`)
-    const installed = await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", setup],
-      cwd: workdir,
-      env: appEnv,
-      timeoutMs: 300000,
-      signal: shellAbort.signal
-    })
-    if (installed.exitCode !== 0)
-      throw new Error(`Project dependency installation failed: ${(await installed.stderr()).slice(-4000)}`)
+    const dependencyMarker = `${REMOTE_TOOLS}/dependencies-${createHash("sha256").update(workdir).digest("hex")}.sha256`
+    const dependencySeed = createHash("sha256")
+      .update(setup)
+      .update(JSON.stringify(Object.entries(appEnv).sort()))
+      .digest("hex")
+    const setupSandbox = sandbox
+    const dependencyCache = (mode: "check" | "save") =>
+      setupSandbox.runCommand({
+        cmd: "node",
+        args: ["-e", dependencyCacheScript, mode, dependencyMarker, dependencySeed],
+        cwd: workdir,
+        signal: shellAbort.signal
+      })
+    const cachedDependencies = await dependencyCache("check")
+    if (cachedDependencies.exitCode === 0)
+      log("Reusing project dependencies (manifests, lockfiles and install settings unchanged)")
+    else {
+      log(`Installing project dependencies: ${setup}`)
+      const invalidated = await sandbox.runCommand("rm", ["-f", dependencyMarker])
+      if (invalidated.exitCode !== 0) throw new Error("Could not invalidate the dependency install marker")
+      const installed = await sandbox.runCommand({
+        cmd: "sh",
+        args: ["-c", setup],
+        cwd: workdir,
+        env: appEnv,
+        timeoutMs: 300000,
+        signal: shellAbort.signal
+      })
+      if (installed.exitCode !== 0)
+        throw new Error(`Project dependency installation failed: ${(await installed.stderr()).slice(-4000)}`)
+      const recorded = await dependencyCache("save")
+      if (recorded.exitCode !== 0) throw new Error("Could not record successful dependency setup")
+    }
     if (signalReceived) return
     if (!localHarness && options.fx !== false && options.shell !== false) {
       log("Preparing fx")
@@ -587,7 +629,9 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
         options.gateway !== false &&
         (!options.harness || options.harness === "fx")
       ) {
-        log(`Connecting fx to the project's team Gateway ($${options.gatewayBudget || "5"} session budget)`)
+        log(
+          `Connecting fx to the project's team Gateway (${options.gatewayBudget === "none" ? "no session spending cap" : `$${options.gatewayBudget || "5"} session budget`})`
+        )
         try {
           gateway = await createSandboxGateway(
             (binary, args, config) =>
@@ -597,7 +641,7 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
               teamId: project.accountId,
               sessionId: savedSession.id,
               minutes: timeoutMinutes,
-              budget: Number(options.gatewayBudget || 5)
+              budget: options.gatewayBudget === "none" ? undefined : Number(options.gatewayBudget || 5)
             }
           )
           if (!localHarness && fxBinary) await configureSandboxFxGateway(sandbox, fxBinary, gateway)
@@ -613,7 +657,7 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
         log(`Starting local ${options.harness}; project files and commands stay in ${workdir}`)
         shellActive = true
         if (options.harness === "eve") {
-          log("Eve: remote agent with a local terminal client; $1 model cap, up to 30 minutes")
+          log("Eve: remote agent with a local terminal client; up to 30 minutes of model access")
           log("Use /detach, then Enter to reconnect. Ctrl-C at the reconnect prompt exits and stops Eve.")
           await runHarnessProcess(
             "bun",

@@ -7,7 +7,14 @@ import { setTimeout as delay } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
 import { parseArgs } from "node:util"
 import { Sandbox } from "@vercel/sandbox"
+import { eveBuildCacheProbe, eveBuildFingerprint } from "./build-cache.mjs"
 import { eveClient, runClient } from "./client.mjs"
+import {
+  openEveConversation,
+  prepareEveWorkspaceScript,
+  saveEveConversationScript,
+  validateConversation
+} from "./conversation.mjs"
 import { ModelSelection } from "./model-command.mjs"
 import { waitToReconnect } from "./reconnect.mjs"
 import { EVE_INSTALL_CONFIG, EVE_MODEL, EVE_VERSION } from "./settings.mjs"
@@ -24,7 +31,7 @@ const { runSandboxCli } = await import(
 const { harnessStartupContext } = await import(
   new URL(`../../${runtimeModules}/runtime/harness.${extension}`, import.meta.url)
 )
-const { configuredGitIdentity } = await import(
+const { configuredGitIdentity, configureSandboxGitIdentity } = await import(
   new URL(`../../${runtimeModules}/runtime/git-identity.${extension}`, import.meta.url)
 )
 
@@ -51,7 +58,7 @@ const minutes = Math.min(values.check ? 10 : 30, remainingMinutes)
 if (minutes < 1) throw new Error("The sandbox is about to expire; extend it or resume d3k before testing")
 const port = 3001
 if (sandbox.routes.some((route) => route.port === port)) throw new Error("Sandbox port 3001 is already in use")
-const directory = `/tmp/d3k-eve-${randomBytes(6).toString("hex")}`
+let directory
 let localDirectory
 let gateway
 let server
@@ -75,7 +82,6 @@ async function remote(command, args, options = {}) {
 
 try {
   console.log(`Preparing Eve ${EVE_VERSION} in ${record.sandbox}; the local browser stays paired through d3k…`)
-  await sandbox.runCommand({ cmd: "mkdir", args: ["-p", `${directory}/agent/channels`] })
   const names = [
     "connection.mjs",
     "settings.mjs",
@@ -90,10 +96,10 @@ try {
     type: "module",
     dependencies: { eve: EVE_VERSION, ai: "7.0.159", zod: "4.6.7" }
   })
-  await sandbox.writeFiles([
+  const files = [
     ...(await Promise.all(
       names.map(async (name) => ({
-        path: `${directory}/${name}`,
+        path: name,
         content:
           name === "agent/instructions.md"
             ? Buffer.from(
@@ -102,16 +108,45 @@ try {
             : await readFile(join(source, name))
       }))
     )),
-    { path: `${directory}/package.json`, content: Buffer.from(manifest) },
-    { path: `${directory}/bunfig.toml`, content: Buffer.from(EVE_INSTALL_CONFIG) }
-  ])
+    { path: "package.json", content: Buffer.from(manifest) },
+    { path: "bunfig.toml", content: Buffer.from(EVE_INSTALL_CONFIG) }
+  ]
+  const buildFingerprint = eveBuildFingerprint(files)
+  directory = values.check
+    ? `/tmp/d3k-eve-check-${randomBytes(6).toString("hex")}`
+    : `/tmp/d3k-eve-sessions/${record.id}`
+  const prepared = await sandbox.runCommand({
+    cmd: "node",
+    args: ["-e", prepareEveWorkspaceScript, directory, record.id, record.workdir, status.appUrl]
+  })
+  if (prepared.exitCode !== 0)
+    throw new Error(`Could not recover the Eve workspace: ${(await prepared.stderr()).slice(-2000)}`)
+  const { state: conversationState, migrated } = JSON.parse(await prepared.stdout())
+  if (conversationState) validateConversation(conversationState, { owner: record.id, workdir: record.workdir })
+  const created = await sandbox.runCommand({ cmd: "mkdir", args: ["-p", `${directory}/agent/channels`] })
+  if (created.exitCode !== 0) throw new Error("Could not prepare the remote Eve directory")
+  const cached = await sandbox.runCommand({
+    cmd: "node",
+    args: ["-e", eveBuildCacheProbe, buildFingerprint],
+    cwd: directory
+  })
+  const reuseBuild = cached.exitCode === 0
+  if (!reuseBuild) {
+    await remote("rm", ["-f", ".d3k-build.sha256"])
+    await sandbox.writeFiles(files.map((file) => ({ ...file, path: `${directory}/${file.path}` })))
+  }
+  const gitIdentity = await configureSandboxGitIdentity(sandbox, record.workdir, await configuredGitIdentity(cli))
   const env = {
-    ...(await configuredGitIdentity(cli)),
+    ...gitIdentity,
     D3K_EVE_WORKDIR: record.workdir,
     D3K_EVE_ISOLATED_HOST: "1",
     EVE_SCHEDULES_DISABLED: "1"
   }
-  console.log("Building the remote service and preparing the local client…")
+  console.log(
+    reuseBuild
+      ? "Reusing the built remote Eve service; preparing the local client…"
+      : "Building the remote service and preparing the local client…"
+  )
   const timed = async (label, operation) => {
     const started = performance.now()
     await operation()
@@ -121,8 +156,10 @@ try {
   // finally cannot remove the client's directory while its install is writing.
   const preparations = await Promise.allSettled([
     (async () => {
+      if (reuseBuild) return
       await timed("Remote Eve dependencies installed", () => remote("bun", ["install"]))
       await timed("Remote Eve service built", () => remote("node", ["node_modules/eve/bin/eve.js", "build"], { env }))
+      await sandbox.writeFiles([{ path: `${directory}/.d3k-build.sha256`, content: Buffer.from(buildFingerprint) }])
     })(),
     timed("Local Eve client ready", async () => {
       localDirectory = await mkdtemp(join(tmpdir(), "d3k-eve-client-"))
@@ -139,7 +176,10 @@ try {
     teamId: record.team,
     sessionId: `${record.id} Eve session`,
     minutes,
-    budget: 1
+    budget:
+      record.gatewayBudgetConfigured && record.gatewayBudget && record.gatewayBudget !== "none"
+        ? Number(record.gatewayBudget)
+        : undefined
   })
   const token = randomBytes(32).toString("hex")
   await sandbox.update({ ports: [...sandbox.routes.map((route) => route.port), port] })
@@ -166,9 +206,28 @@ try {
   const { Client } = await eveClient()
   const models = new ModelSelection(EVE_MODEL)
   const client = new Client({ baseUrl: serviceUrl, auth: { bearer: token }, headers: () => models.headers() })
-  const { session } = await client.sessions.create()
+  const session = values.check
+    ? (await client.sessions.create()).session
+    : await openEveConversation({
+        client,
+        state: conversationState,
+        owner: record.id,
+        workdir: record.workdir,
+        save: async (state) => {
+          await remote("node", ["-e", saveEveConversationScript, directory, JSON.stringify(state)])
+        },
+        signal: AbortSignal.any([shutdown.signal, AbortSignal.timeout(20000)])
+      })
+  if (!values.check)
+    console.log(
+      `${conversationState ? (migrated ? "Recovered the most recent existing" : "Resuming") : "Created"} Eve conversation ${session.id}.`
+    )
   console.log(`Ready. Local input → remote Eve → ${record.workdir}`)
-  console.log(`Model budget: $1 maximum; access expires ${new Date(gateway.expiresAt).toLocaleTimeString()}.`)
+  const spendingLimit =
+    record.gatewayBudgetConfigured && record.gatewayBudget && record.gatewayBudget !== "none"
+      ? `$${record.gatewayBudget} maximum`
+      : "no session spending cap"
+  console.log(`Team AI Gateway: ${spendingLimit}; access expires ${new Date(gateway.expiresAt).toLocaleTimeString()}.`)
   if (values.check) {
     const denied = await fetch(`${serviceUrl}/eve/v1/session`, { method: "POST" })
     if (denied.status !== 401) throw new Error(`Expected 401, got ${denied.status}`)
@@ -190,7 +249,7 @@ try {
     }
     if (expiry.aborted)
       console.log(
-        "Eve's session time limit was reached. Remote Eve has stopped; no message was retried. Start d3k again for a new Eve conversation."
+        "Eve's session time limit was reached. Remote Eve has stopped; no message was retried. Resume d3k to return to this conversation with renewed access."
       )
   }
 } finally {

@@ -22,6 +22,8 @@ export default defineAgent({
                 (part) => part.type === "file" && part.mediaType === "image/png" && part.data.type === "data"
               )
           )
+          const historyCase = /remember-case|recall-case/.test(JSON.stringify(prompt))
+          const remembered = JSON.stringify(prompt).includes("remember-case")
           const modelCase = JSON.stringify(prompt).includes("model-case")
           const contextCase = JSON.stringify(prompt).includes("context-case")
           if (contextCase) {
@@ -46,14 +48,18 @@ export default defineAgent({
           const bash = tools?.find((tool) => tool.name === "bash")
           const reply = contextCase
             ? "CONTEXT_READY"
-            : modelCase
-              ? `MODEL_USED:${selected.id}`
-              : image
-                ? "IMAGE_RECEIVED"
-                : "The remote task finished."
+            : historyCase
+              ? remembered
+                ? "HISTORY_PRESENT"
+                : "HISTORY_MISSING"
+              : modelCase
+                ? `MODEL_USED:${selected.id}`
+                : image
+                  ? "IMAGE_RECEIVED"
+                  : "The remote task finished."
           const command = approval ? "printf approved >> approval.txt" : "sleep 2; printf completed >> proof.txt"
           const chunks =
-            finished || image || modelCase || contextCase || !bash
+            finished || image || modelCase || contextCase || historyCase || !bash
               ? [
                   { type: "text-start", id: "reply" },
                   { type: "text-delta", id: "reply", delta: reply },
@@ -74,8 +80,8 @@ export default defineAgent({
                 {
                   type: "finish",
                   finishReason: {
-                    unified: finished || image || modelCase || contextCase ? "stop" : "tool-calls",
-                    raw: finished || image || modelCase || contextCase ? "stop" : "tool_calls"
+                    unified: finished || image || modelCase || contextCase || historyCase ? "stop" : "tool-calls",
+                    raw: finished || image || modelCase || contextCase || historyCase ? "stop" : "tool_calls"
                   },
                   usage: {
                     inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },

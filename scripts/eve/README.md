@@ -2,8 +2,9 @@
 
 Eve runs beside the project in the sandbox, with its terminal UI running locally.
 New CLI sandbox sessions launch it by default; `--harness eve` also selects it
-explicitly. It does **not** implement persistent cross-launch conversations or
-change d3k's compute cleanup. The standalone launcher connects to an already running sandbox.
+explicitly. Each saved d3k sandbox session retains its Eve conversation and workflow data
+in a stable remote service directory. Resume reopens that conversation, including
+after rebuilding the service. It does not change d3k's compute cleanup. The standalone launcher connects to an already running sandbox.
 
 The viable design is a local client using Eve's HTTP API, with an Eve service
 running beside the existing checkout and dev server. Mosh/UDP is unnecessary:
@@ -51,13 +52,15 @@ The launcher uses your local Vercel login, uploads this source into a separate
 temporary service directory in that existing sandbox, installs pinned Eve
 dependencies, and opens the local client. No commit, release, global Eve install,
 or website deployment is needed. Management credentials remain on the laptop.
-Each Eve session has a $1 maximum model budget and expires within 30 minutes or before
+Each Eve session uses a project-scoped key under your team’s AI Gateway, with no
+session spending cap by default. `--gateway-budget <usd>` sets an optional cap;
+`--gateway-budget none` removes a saved cap. Access expires within 30 minutes or before
 the current sandbox expires. Credentials stay in process memory and are not
 printed or saved in a launcher file. The remote supervisor also stops Eve at
 the access expiration even if the launcher disappears.
 At expiry, the local composer or reconnect menu closes and the launcher explains
 that the session time limit was reached. It does not renew access or replay a
-message. Launch d3k again for a new Eve conversation.
+message. Resume d3k to reopen the same conversation with renewed access.
 
 Try these interactions:
 
@@ -281,26 +284,28 @@ message to upload the queued image. `/answer <interaction-id> <option-id or text
 answers a pending request. `/cancel` cancels execution; `/detach` or Ctrl+C leaves
 it running remotely. Interactive terminals use Eve’s native renderer.
 
-## Required d3k integration before shipping
+## Conversation resume and remaining lifecycle work
 
-1. The CLI Eve mode uses remote agent execution and a local client.
-   Eve rc.2's standard `remote connect` TUI creates a fresh session and has no
-   existing-session option; use the public SessionStore path demonstrated here,
-   or add resume support upstream. Do not silently start a new conversation.
-2. Introduce detach separately from stop. Today's `closeSandboxResources()` stops
-   owned compute and removes harness credentials. That would defeat this design.
-   Keep the remote Eve service and scoped Gateway key until their bounded expiry;
-   an explicit stop should still release them.
-3. Resume by reconnecting to the retained service and fixed conversation first.
-   Today's sandbox resume reinstalls tools/dependencies and restarts the dev
-   runtime. Re-pair only the browser bridge and local proxy where possible;
-   do not interrupt an active Eve command to resume the client.
-4. Extend discovery metadata with Eve version and conversation identity, keeping
-   secrets and transcript history remote. Retrieve a new device's access through
-   owner-authenticated control, rather than putting bearer credentials in URLs.
-5. Prove those lifecycle changes in a real Vercel Sandbox, including laptop network
-   loss, Gateway expiry, explicit stop, and browser calls while disconnected.
-   Resolve the optional restart reproducer before claiming crash recovery.
+`d3k --resume <id>` reads the saved Eve conversation ID from the sandbox, restarts
+Eve with fresh temporary credentials, verifies that the saved history is readable,
+and attaches the local native UI to that exact conversation. History and discovery
+metadata stay remote. The service directory is stable per d3k session rather than
+per build hash, so rebuilding does not switch conversation storage. Existing older
+sessions adopt their most recent remote conversation; separate older conversations
+are retained on disk and are not merged. A missing saved conversation produces an
+error instead of silently creating a replacement or replaying a prompt.
+
+Stopping the launcher still stops its service and owned compute. Continuing an
+active agent turn while the laptop is closed needs separate detach/stop lifecycle
+work, bounded Gateway access, and authenticated connection recovery from another
+device. The current resume support preserves history; it does not promise that an
+interrupted command completed or automatically replay it. Inspect remote state
+before retrying an uncertain mutation.
+
+The verification fixture checks saved conversation replay and model history after
+service stop/rebuild/restart, plus pending approval recovery and exactly-once tool
+execution. Full laptop network-loss and cross-device browser handoff remain future
+work.
 
 A phone can use the same Eve API through a future web client. This terminal
 client does not provide a phone UI. The macOS d3k companion cannot automatically turn

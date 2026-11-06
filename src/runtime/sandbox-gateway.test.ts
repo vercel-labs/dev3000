@@ -4,6 +4,27 @@ import { createSandboxGateway } from "./sandbox-gateway.js"
 const options = { projectId: "prj_test", teamId: "team_test", sessionId: "session", minutes: 30, budget: 5 }
 
 describe("sandbox Gateway credentials", () => {
+  it("omits the spending quota by default while retaining project scope and expiration", async () => {
+    const run = vi.fn(async (_binary: string, _args: string[], input?: { input?: string }) => {
+      const payload = JSON.parse(input?.input || "{}")
+      expect(payload).not.toHaveProperty("aiGatewayQuota")
+      expect(payload).toMatchObject({ purpose: "ai-gateway", projectId: "prj_test" })
+      expect(payload.expiresAt).toBeGreaterThan(Date.now())
+      return JSON.stringify({ apiKeyString: "test-secret", apiKey: { ...payload, id: "key-id", teamId: "team_test" } })
+    })
+    await createSandboxGateway(run, { ...options, budget: undefined })
+    expect(run).toHaveBeenCalledOnce()
+  })
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects invalid explicit budget %s before creating a key",
+    async (budget) => {
+      const run = vi.fn()
+      await expect(createSandboxGateway(run, { ...options, budget })).rejects.toThrow("budget")
+      expect(run).not.toHaveBeenCalled()
+    }
+  )
+
   it.each([
     [30, 30],
     [60, 60],
