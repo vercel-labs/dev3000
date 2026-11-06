@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.190",
+    date: "2026-11-06",
+    type: "minor",
+    highlights: [
+      "Preserve Eve sessions and simplify sandbox PR publishing",
+      "Safely serialize release changelog metadata",
+      "Add Eve sandbox sessions and local GitHub publishing",
+      "Add sandbox MCP access, browser telemetry, and reliable fx resume"
+    ]
+  },
+
+  {
     version: "0.0.189",
     date: "2026-10-29",
     type: "patch",

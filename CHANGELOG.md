@@ -4,6 +4,15 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.190] - 2026-11-06
+
+**Feature Release**
+
+- Preserve Eve sessions and simplify sandbox PR publishing
+- Safely serialize release changelog metadata
+- Add Eve sandbox sessions and local GitHub publishing
+- Add sandbox MCP access, browser telemetry, and reliable fx resume
+
 ## [0.0.189] - 2026-10-29
 
 **Patch Release**
