@@ -45,8 +45,11 @@ export function isolatedChromeInvocation(binary: string, args: string[], profile
 (deny appleevent-send)
 (deny mach-lookup (global-name "com.apple.pasteboard.1") (global-name "com.apple.pasteboard") (global-name "com.apple.pbs"))`
   // Seatbelt cannot be nested. The outer policy confines all Chrome processes, rather than renderers alone.
-  const chromeArgs = args.filter((arg) => arg !== "--no-sandbox" && arg !== "--disable-setuid-sandbox")
+  const chromeArgs = args.filter(
+    (arg) => arg !== "--no-sandbox" && arg !== "--disable-setuid-sandbox" && !arg.startsWith("--user-data-dir=")
+  )
   chromeArgs.push(
+    `--user-data-dir=${directory}`,
     "--no-sandbox",
     // Chrome's GPU-test startup mode omits testing/flag banners; OS confinement still applies.
     "--test-type=gpu",
@@ -60,7 +63,15 @@ export function isolatedChromeInvocation(binary: string, args: string[], profile
   return {
     binary: "/usr/bin/sandbox-exec",
     args: ["-p", policy, executable, ...chromeArgs],
-    env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LANG: "en_US.UTF-8", HOME: directory, TMPDIR: temporary }
+    // CoreFoundation can resolve the account's real home instead of HOME during
+    // Chrome's early startup, before --user-data-dir has been applied.
+    env: {
+      PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
+      LANG: "en_US.UTF-8",
+      HOME: directory,
+      CFFIXED_USER_HOME: directory,
+      TMPDIR: temporary
+    }
   }
 }
 

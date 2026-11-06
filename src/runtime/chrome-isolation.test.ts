@@ -1,5 +1,5 @@
 import { execFile, execFileSync, spawnSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
@@ -101,13 +101,21 @@ describe.skipIf(process.platform !== "darwin")("Chrome filesystem confinement", 
         source,
         `import AppKit
 let board = NSPasteboard(name: NSPasteboard.Name("${name}"))
-if CommandLine.arguments.contains("seed") { board.clearContents(); print(board.setString("test-sentinel",forType:.string)) }
+if CommandLine.arguments.contains("home") { print(NSHomeDirectory()) }
+else if CommandLine.arguments.contains("seed") { board.clearContents(); print(board.setString("test-sentinel",forType:.string)) }
 else { print(board.string(forType:.string) == "test-sentinel") }`
       )
       execFileSync("/usr/bin/swiftc", [source, "-o", binary])
       expect(execFileSync(binary, ["seed"], { encoding: "utf8" }).trim()).toBe("true")
       expect(execFileSync(binary, [], { encoding: "utf8" }).trim()).toBe("true")
       const invocation = isolatedChromeInvocation(chrome, [], join(directory, "profile"))
+      // Cocoa must resolve its home inside the isolated profile even before
+      // Chrome has applied its --user-data-dir override.
+      const home = execFileSync("/usr/bin/sandbox-exec", ["-p", invocation.args[1], binary, "home"], {
+        env: invocation.env,
+        encoding: "utf8"
+      })
+      expect(realpathSync(home.trim())).toBe(realpathSync(join(directory, "profile")))
       const confined = spawnSync("/usr/bin/sandbox-exec", ["-p", invocation.args[1], binary], {
         encoding: "utf8",
         timeout: 10000
