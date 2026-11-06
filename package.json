@@ -13,6 +13,7 @@
     "bin/",
     "dist/",
     "README.md",
+    "scripts/eve/",
     "skills/d3k/"
   ],
   "scripts": {

@@ -17,7 +17,7 @@ export function addSandboxProjectOptions(command: Command): Command {
     .option("--scope <team>", "Vercel team name or ID")
     .option("--branch <ref>", "Git branch or revision to clone")
     .option("--name <name>", "Name for a new persistent sandbox")
-    .option("--harness <name>", "Run fx, codex, or claude connected to the sandbox", parseHarness)
+    .option("--harness <name>", "Run fx, codex, claude, or Eve connected to the sandbox", parseHarness, "eve")
     .option(
       "--harness-location <location>",
       "Where to run the harness: local or sandbox",
@@ -42,6 +42,12 @@ export function addSandboxProjectOptions(command: Command): Command {
 export function resolveSandboxOptions(options: SandboxOptions): SandboxOptions {
   if (options.harness) parseHarness(options.harness)
   if (options.harnessLocation) parseHarnessLocation(options.harnessLocation)
+  if (options.harness === "eve") {
+    if (options.harnessLocation === "sandbox")
+      throw new Error("Eve runs remotely with a local client; omit --harness-location")
+    if (options.gateway === false)
+      throw new Error("The Eve harness requires its bounded Gateway key; omit --no-gateway")
+  }
   if (options.harness && options.shell === false) throw new Error("--harness cannot be combined with --no-shell")
   if (!options.project) throw new Error("Specify --project <team/project-or-id>")
   if (options.hostname && !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(options.hostname))
@@ -89,7 +95,7 @@ export function resolveSandboxResume(options: Partial<SandboxOptions>): SandboxO
     installCommand: record.installCommand,
     timeout: record.timeout,
     fx: record.fx,
-    harness: record.harness,
+    harness: options.shell === false && options.harness === undefined ? undefined : record.harness,
     harnessLocation: record.harnessLocation,
     gateway: record.gateway,
     gatewayBudget: record.gatewayBudget,
@@ -101,6 +107,10 @@ export async function runSandboxProject(options: SandboxOptions, command?: Comma
   // Commander supplies defaults for negated flags; resume should retain saved preferences
   // unless the user explicitly overrides them for this invocation.
   const explicit = { ...options }
+  // The default applies to a new interactive launch, not a retained companion or
+  // a saved session's harness selection (including an older plain-shell session).
+  if (command?.getOptionValueSource("harness") === "default" && (options.resume || options.shell === false))
+    delete explicit.harness
   if (options.resume && command)
     for (const key of ["fx", "shell", "timeout", "gateway", "gatewayBudget", "harnessLocation"] as const)
       if (command.getOptionValueSource(key) === "default") delete explicit[key]

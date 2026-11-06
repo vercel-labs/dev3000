@@ -82,6 +82,30 @@ describe("terminal handoff", () => {
     expect(output.read()).toBeNull()
   })
 
+  it("clears a stale TUI row so the resume command has no old prefix or suffix", async () => {
+    const { output } = terminal()
+    const message = "Resume this sandbox: d3k --resume e55ea06a-a4fd-4337-b220-604d6755153b"
+    await finishTerminalCleanup(() => {}, message, output)
+    // Model terminal row writes: CR moves the cursor, erase-line clears the row,
+    // and ordinary characters overwrite rather than truncate existing contents.
+    let row = [..."Old agent transcript ".repeat(8), ..."Hub route and open a draft PR;"]
+    let column = 17
+    const lines: string[] = []
+    for (const token of output
+      .read()
+      .toString()
+      .match(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]|[\\s\\S]`, "g")) || []) {
+      if (token === "\r") column = 0
+      else if (token === "\x1b[2K") row = []
+      else if (token === "\n") {
+        lines.push(row.join(""))
+        row = []
+      } else row[column++] = token
+    }
+    expect(lines).toEqual([message])
+    expect(column).toBe(0)
+  })
+
   it.skipIf(process.platform === "win32")(
     "leaves a complete resume command after Node PTY restoration",
     async () => {
@@ -126,7 +150,7 @@ try:
             break
     assert child.poll() == 0 and sent, repr(output)
     resume = sys.argv[2].encode()
-    assert output.endswith(resume + b'\\r\\n'), repr(output)
+    assert output.replace(b'\\r\\r\\n', b'\\r\\n').endswith(resume + b'\\r\\n'), repr(output)
     assert output.rfind(b'\\x1b[=0u') < output.index(resume), repr(output)
     assert b'99;5u' not in output, repr(output)
     restored = termios.tcgetattr(slave)

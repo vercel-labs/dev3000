@@ -43,6 +43,32 @@ async function parse(args: string[]) {
 }
 describe("sandbox resume CLI", () => {
   it.each([{ prefix: [] }, { prefix: ["sandbox"] }])(
+    "defaults new interactive sessions to Eve for prefix %j",
+    async ({ prefix }) => {
+      const original = Object.getOwnPropertyDescriptor(process.stdin, "isTTY")
+      Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true })
+      try {
+        await parse([...prefix, "--project", "team/project"])
+        expect(launchSandbox).toHaveBeenLastCalledWith(expect.objectContaining({ harness: "eve" }))
+        await parse([...prefix, "--project", "team/project", "--harness", "fx"])
+        expect(launchSandbox).toHaveBeenLastCalledWith(expect.objectContaining({ harness: "fx" }))
+      } finally {
+        if (original) Object.defineProperty(process.stdin, "isTTY", original)
+        else delete (process.stdin as { isTTY?: boolean }).isTTY
+      }
+    }
+  )
+  it.each([{ prefix: [] }, { prefix: ["sandbox"] }])(
+    "omits the default harness with --no-shell for prefix %j",
+    async ({ prefix }) => {
+      await parse([...prefix, "--project", "team/project", "--no-shell"])
+      expect(vi.mocked(launchSandbox).mock.lastCall?.[0].harness).toBeUndefined()
+      vi.mocked(readSandboxSession).mockReturnValue({ ...record, harness: "eve" })
+      await parse([...prefix, "--resume", record.id, "--no-shell"])
+      expect(vi.mocked(launchSandbox).mock.lastCall?.[0].harness).toBeUndefined()
+    }
+  )
+  it.each([{ prefix: [] }, { prefix: ["sandbox"] }])(
     "lists sessions without launching infrastructure for prefix %j",
     async ({ prefix }) => {
       const output = vi.spyOn(console, "log").mockImplementation(() => {})

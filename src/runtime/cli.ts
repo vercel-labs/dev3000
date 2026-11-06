@@ -101,6 +101,33 @@ program
     print(await queryRuntime("/status"))
   })
 program
+  .command("github <method> <path>")
+  .description("Use laptop GitHub authentication for this sandbox's linked repository (Git Data and PR APIs)")
+  .option("--input <source>", "Read the JSON request body from stdin (-)")
+  .action(async (method: string, path: string, options) => {
+    if (!["GET", "POST", "PATCH"].includes(method)) throw new Error("Use GET, POST or PATCH")
+    let body: unknown
+    if (options.input !== undefined) {
+      if (options.input !== "-") throw new Error("Use --input - to read JSON from stdin")
+      const chunks: Buffer[] = []
+      let size = 0
+      for await (const chunk of process.stdin) {
+        size += chunk.length
+        if (size > 1024 * 1024 - 4096) throw new Error("GitHub body too large; upload blobs individually")
+        chunks.push(Buffer.from(chunk))
+      }
+      body = JSON.parse(Buffer.concat(chunks).toString())
+    }
+    print(
+      await queryRuntime(
+        "/github",
+        process.cwd(),
+        "POST",
+        JSON.stringify({ method, path, ...(body === undefined ? {} : { body }) })
+      )
+    )
+  })
+program
   .command("events")
   .description("Read timeline events after a cursor")
   .option("--after <cursor>", "Read after this sequence number", "0")

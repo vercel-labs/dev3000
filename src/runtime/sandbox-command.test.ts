@@ -34,7 +34,7 @@ describe("sandbox project selection", () => {
     expect(() => resolveSandboxOptions({ project: "team/project", gatewayBudget })).toThrow("--gateway-budget")
   })
 
-  it.each(["", "sandbox"])("parses the same shell/fx defaults for prefix %j", async (subcommand) => {
+  it.each(["", "sandbox"])("parses Eve defaults and companion-only overrides for prefix %j", async (subcommand) => {
     const prefix = subcommand ? [subcommand] : []
     const program = new Command().exitOverride()
     registerSandboxCommand(program)
@@ -42,7 +42,10 @@ describe("sandbox project selection", () => {
     const target = prefix.length ? program.commands[0] : program
     let result: unknown
     target.action((options) => {
-      result = resolveSandboxOptions(options)
+      // runSandboxProject removes the default harness for companion-only launches.
+      const explicit = { ...options }
+      if (target.getOptionValueSource("harness") === "default" && options.shell === false) delete explicit.harness
+      result = resolveSandboxOptions(explicit)
     })
     await program.parseAsync([...prefix, "--project", "elsigh-pro/cranio-mom", "--command", "bun run dev"], {
       from: "user"
@@ -52,6 +55,7 @@ describe("sandbox project selection", () => {
       scope: "elsigh-pro",
       timeout: "60",
       harnessLocation: "local",
+      harness: "eve",
       shell: true,
       fx: true,
       command: "bun run dev"

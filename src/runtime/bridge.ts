@@ -6,6 +6,10 @@ const MAX_BYTES = 16 * 1024 * 1024
 const MAX_CHANNELS = 32
 const TIMEOUT = 15000
 type Frame = { id: string; type: string; path?: string; method?: string; body?: string; status?: number }
+const MAX_GITHUB_BYTES = 1024 * 1024
+const GITHUB_TIMEOUT = 65000
+const UNCERTAIN_GITHUB =
+  "GitHub connection lost or timed out. No request was replayed; inspect the remote branch/PR before retrying."
 
 function send(socket: WebSocket | undefined, frame: Frame): boolean {
   if (!socket || socket.readyState !== WebSocket.OPEN) return false
@@ -55,6 +59,10 @@ export async function startBridge(options: {
   let companion: WebSocket | undefined
   const channels = new Map<string, WebSocket>()
   const pending = new Map<string, { response: ServerResponse; timer: NodeJS.Timeout }>()
+  const github = new Map<
+    string,
+    { resolve: (body: string) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
+  >()
   const ingress = createServer((_request, response) => {
     response.writeHead(404).end()
   })
@@ -70,6 +78,11 @@ export async function startBridge(options: {
       response.writeHead(503).end("Browser disconnected")
     }
     pending.clear()
+    for (const { reject, timer } of github.values()) {
+      clearTimeout(timer)
+      reject(new Error(UNCERTAIN_GITHUB))
+    }
+    github.clear()
     options.onState?.(false)
   }
   ingress.on("upgrade", (request, socket, head) => {
@@ -108,6 +121,15 @@ export async function startBridge(options: {
           if (typeof frame.id !== "string") throw new Error("Invalid bridge frame")
           if (frame.type === "heartbeat-ack") {
             alive = true
+          } else if (frame.type === "github-response") {
+            const item = github.get(frame.id)
+            if (!item) return
+            clearTimeout(item.timer)
+            github.delete(frame.id)
+            if (typeof frame.body !== "string" || Buffer.byteLength(frame.body) > MAX_BYTES / 2)
+              item.reject(new Error("Invalid GitHub response"))
+            else if (frame.status !== 200) item.reject(new Error(frame.body))
+            else item.resolve(frame.body)
           } else if (frame.type === "response") {
             const item = pending.get(frame.id)
             if (!item) return
@@ -186,6 +208,30 @@ export async function startBridge(options: {
       cdpBase: base,
       port,
       connected: () => companion?.readyState === WebSocket.OPEN,
+      github: (args: Record<string, unknown>): Promise<string> => {
+        if (companion?.readyState !== WebSocket.OPEN)
+          return Promise.reject(
+            new Error(
+              "GitHub publishing needs the laptop companion connected. Credentials stay on the laptop; do not log in inside the sandbox."
+            )
+          )
+        const body = JSON.stringify(args)
+        if (Buffer.byteLength(body) > MAX_GITHUB_BYTES) return Promise.reject(new Error("GitHub request exceeds 1 MiB"))
+        if (github.size >= MAX_CHANNELS) return Promise.reject(new Error("Too many GitHub requests"))
+        return new Promise((resolve, reject) => {
+          const id = randomUUID()
+          const timer = setTimeout(() => {
+            github.delete(id)
+            reject(new Error(UNCERTAIN_GITHUB))
+          }, GITHUB_TIMEOUT)
+          github.set(id, { resolve, reject, timer })
+          if (!send(companion, { id, type: "github-request", body })) {
+            clearTimeout(timer)
+            github.delete(id)
+            reject(new Error(UNCERTAIN_GITHUB))
+          }
+        })
+      },
       close: async () => {
         companion?.terminate()
         reset()
@@ -208,6 +254,7 @@ export function connectCompanion(options: {
   chromePort: number
   onState?: (connected: boolean) => void
   allowLoopback?: boolean
+  github?: (args: Record<string, unknown>, signal: AbortSignal) => Promise<string>
 }) {
   const url = new URL(options.url)
   if (url.protocol !== "wss:" && !(options.allowLoopback && url.protocol === "ws:" && url.hostname === "127.0.0.1")) {
@@ -262,6 +309,38 @@ export function connectCompanion(options: {
         if (typeof frame.id !== "string" || frame.id.length > 100) throw new Error("Invalid frame")
         if (frame.type === "heartbeat") {
           send(ws, { id: frame.id, type: "heartbeat-ack" })
+        } else if (frame.type === "github-request") {
+          if (
+            typeof frame.body !== "string" ||
+            Buffer.byteLength(frame.body) > MAX_GITHUB_BYTES ||
+            requests.size >= MAX_CHANNELS
+          )
+            throw new Error("Invalid GitHub request")
+          const args: unknown = JSON.parse(frame.body)
+          if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("Invalid GitHub arguments")
+          const controller = new AbortController()
+          requests.add(controller)
+          const timer = setTimeout(() => controller.abort(), GITHUB_TIMEOUT - 1000)
+          void Promise.resolve()
+            .then(() => {
+              if (!options.github)
+                throw new Error(
+                  "This companion does not support GitHub publishing. Update d3k and reconnect; do not authenticate in the sandbox."
+                )
+              return options.github(args as Record<string, unknown>, controller.signal)
+            })
+            .then((body) => {
+              if (controller.signal.aborted) throw new Error(UNCERTAIN_GITHUB)
+              if (Buffer.byteLength(body) > MAX_BYTES / 2) throw new Error("GitHub response too large")
+              send(ws, { id: frame.id, type: "github-response", status: 200, body })
+            })
+            .catch((error) =>
+              send(ws, { id: frame.id, type: "github-response", status: 502, body: String(error.message).slice(-8192) })
+            )
+            .finally(() => {
+              clearTimeout(timer)
+              requests.delete(controller)
+            })
         } else if (frame.type === "request") {
           if (!isDiscoveryPath(frame.path || "", frame.method || "") || requests.size >= MAX_CHANNELS)
             throw new Error("Invalid discovery request")

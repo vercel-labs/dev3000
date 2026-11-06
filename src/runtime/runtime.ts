@@ -98,6 +98,8 @@ function defaultCommand(cwd: string): string {
 export async function startRuntime(options: RuntimeOptions = {}): Promise<void> {
   const cwd = resolve(options.cwd || process.cwd())
   if (options.harness) parseHarness(options.harness)
+  if (options.harness === "eve")
+    throw new Error("Eve requires remote execution; use d3k --project <team/project> --harness eve")
   if (options.harness && options.serversOnly) throw new Error("--harness requires browser monitoring")
   if (options.harness && !process.stdin.isTTY) throw new Error("--harness requires an interactive terminal")
   const existing = readRuntimeSession(cwd)
@@ -164,7 +166,7 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
   const persist = () => writeFileSync(paths.sessionFile, JSON.stringify(session), { mode: 0o600 })
   const log = (kind: string, message: string, level: EventLevel = "info") =>
     timeline.append({ source: "runtime", level, kind, message })
-  const server = createServer((request, response) => {
+  const server = createServer(async (request, response) => {
     response.setHeader("content-type", "application/json")
     response.setHeader("cache-control", "no-store")
     const send = (code: number, value: unknown) => {
@@ -203,6 +205,19 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
             sessionId: url.searchParams.get("sessionId") || undefined
           })
         )
+      } else if (request.method === "POST" && url.pathname === "/github") {
+        if (!bridge) throw new Error("GitHub publishing requires a sandbox with a connected laptop companion")
+        const chunks: Buffer[] = []
+        let size = 0
+        for await (const chunk of request) {
+          size += chunk.length
+          if (size > 1024 * 1024) throw new Error("GitHub request exceeds 1 MiB")
+          chunks.push(Buffer.from(chunk))
+        }
+        const args = JSON.parse(Buffer.concat(chunks).toString())
+        if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("Invalid GitHub arguments")
+        const body = await bridge.github(args)
+        send(200, JSON.parse(body))
       } else if (request.method === "POST" && url.pathname === "/stop") {
         send(200, { stopping: true })
         void shutdown()

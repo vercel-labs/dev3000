@@ -3,7 +3,7 @@ import { harnessInvocation, harnessSkill, parseHarness } from "./harness.js"
 import { resolveSandboxOptions } from "./sandbox-command.js"
 
 describe("fixed harness selection", () => {
-  it.each(["fx", "codex", "claude"])("accepts supported harness %s", (value) => {
+  it.each(["fx", "codex", "claude", "eve"])("accepts supported harness %s", (value) => {
     expect(parseHarness(value)).toBe(value)
   })
   it.each(["fx; touch /tmp/proof", "sh", "/bin/sh", "codex --yolo", "$(id)", "Claude", ""])(
@@ -43,6 +43,12 @@ describe("fixed harness selection", () => {
   it("validates programmatic sandbox selections as well as CLI selections", () => {
     expect(() => resolveSandboxOptions({ project: "project", harness: "sh" as "fx" })).toThrow("Choose a harness")
     expect(() => resolveSandboxOptions({ project: "project", harness: "fx", shell: false })).toThrow("--no-shell")
+    expect(resolveSandboxOptions({ project: "team/project", harness: "eve" }).harness).toBe("eve")
+    expect(() => resolveSandboxOptions({ project: "project", harness: "eve", harnessLocation: "sandbox" })).toThrow(
+      "omit --harness-location"
+    )
+    expect(() => resolveSandboxOptions({ project: "project", harness: "eve", gateway: false })).toThrow("--no-gateway")
+    expect(() => harnessInvocation("eve", "/tmp/skill.md", "/tmp/context")).toThrow("requires a sandbox")
   })
   it("gives remote harnesses executable browser commands without asking them to bootstrap a local runtime", () => {
     const context = { workdir: "/vercel/app", appUrl: "https://app.d3k.localhost" }

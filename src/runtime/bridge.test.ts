@@ -21,7 +21,7 @@ async function until(predicate: () => boolean) {
   }
 }
 
-async function fixture() {
+async function fixture(github?: (args: Record<string, unknown>, signal: AbortSignal) => Promise<string>) {
   const chrome = createServer((request, response) => {
     response.setHeader("content-type", "application/json")
     response.end(
@@ -58,7 +58,8 @@ async function fixture() {
     url: `ws://127.0.0.1:${bridge.port}/bridge`,
     token,
     chromePort: address.port,
-    allowLoopback: true
+    allowLoopback: true,
+    github
   })
   cleanup.push(companion.close)
   await until(bridge.connected)
@@ -66,6 +67,44 @@ async function fixture() {
 }
 
 describe("sandbox browser bridge", () => {
+  it("forwards GitHub requests to the laptop without changing CDP discovery", async () => {
+    const github = vi.fn(async () => '{"number":123}')
+    const { bridge } = await fixture(github)
+    const args = { method: "POST", path: "/pulls", body: { title: "Test", head: "feature", base: "main" } }
+    expect(JSON.parse(await bridge.github(args))).toEqual({ number: 123 })
+    expect(github).toHaveBeenCalledTimes(1)
+    expect(github.mock.calls[0][0]).toEqual(args)
+    expect((await fetch(`${bridge.cdpBase}/json/version`)).status).toBe(200)
+  })
+
+  it("reports missing local publishing support without requesting remote credentials", async () => {
+    const { bridge } = await fixture()
+    await expect(bridge.github({ method: "GET", path: "/git/ref/heads/main" })).rejects.toThrow("Update d3k")
+  })
+
+  it("rejects pending GitHub operations on disconnect and never replays them", async () => {
+    let signal: AbortSignal | undefined
+    const github = vi.fn((_args: Record<string, unknown>, current: AbortSignal) => {
+      signal = current
+      return new Promise<string>((resolve) => current.addEventListener("abort", () => resolve("{}"), { once: true }))
+    })
+    const { bridge, companion } = await fixture(github)
+    const result = bridge.github({ method: "POST", path: "/pulls", body: {} })
+    const rejected = expect(result).rejects.toThrow("No request was replayed")
+    await until(() => github.mock.calls.length === 1)
+    companion.close()
+    await rejected
+    await until(() => signal?.aborted === true)
+    await expect(bridge.github({ method: "GET", path: "/pulls" })).rejects.toThrow("companion connected")
+    expect(github).toHaveBeenCalledTimes(1)
+  })
+
+  it("bounds GitHub bodies before dispatch", async () => {
+    const github = vi.fn(async () => "{}")
+    const { bridge } = await fixture(github)
+    await expect(bridge.github({ body: "a".repeat(1024 * 1024) })).rejects.toThrow("1 MiB")
+    expect(github).not.toHaveBeenCalled()
+  })
   it.each(["intermediary pings", "suspended client"])("detects a dead tunnel despite %s", async (condition) => {
     const edge = createServer()
     const sockets = new WebSocketServer({ server: edge })

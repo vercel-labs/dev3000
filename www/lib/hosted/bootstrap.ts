@@ -1,7 +1,6 @@
 /** Fixed launcher uploaded into the VM. Only project env and app-scoped preview access enter it. */
 export const cloudBootstrap = `
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 let raw=''; for await (const chunk of process.stdin) raw+=chunk;
@@ -11,26 +10,20 @@ const run=(command,args,cwd)=>{
   const result=spawnSync(command,args,{cwd,env:process.env,encoding:'utf8',maxBuffer:4*1024*1024});
   if(result.status!==0) throw Error(command+' failed: '+(result.stderr||result.error||'').toString().slice(-2000));
 };
-const findChrome=(dir,depth=0)=>{
-  if(depth>8||!fs.existsSync(dir))return;
-  for(const entry of fs.readdirSync(dir,{withFileTypes:true})){
-    const file=path.join(dir,entry.name);
-    if(entry.isFile()&&entry.name==='chrome')return file;
-    if(entry.isDirectory()){const found=findChrome(file,depth+1);if(found)return found;}
-  }
-};
 try {
   process.env.PATH='/tmp/d3k-bun/node_modules/.bin:/tmp/d3k-tools/node_modules/.bin:'+(process.env.PATH||'/usr/local/bin:/usr/bin:/bin');
   if(!config.recover){
   state('installing_tools');
   if(spawnSync('bun',['--version'],{encoding:'utf8'}).status!==0)run('npm',['install','--prefix','/tmp/d3k-bun','bun@1.3.11']);
   run('bun',['add','--cwd','/tmp/d3k-tools','/tmp/d3k-tools/dev3000.tgz']);
-  state('installing_browser');
-  run('sudo',['dnf','install','-y','--skip-broken','nss','nspr','libxkbcommon','atk','at-spi2-atk','at-spi2-core','libXcomposite','libXdamage','libXrandr','libXfixes','libXcursor','libXi','libXtst','libXScrnSaver','libXext','mesa-libgbm','libdrm','mesa-libGL','mesa-libEGL','cups-libs','alsa-lib','pango','cairo','gtk3','dbus-libs']);
-  run('/tmp/d3k-tools/node_modules/.bin/agent-browser',['install']);
   }
-  const chrome=findChrome(path.join(os.homedir(),'.agent-browser'))||findChrome(path.join(os.homedir(),'.cache'));
-  if(!chrome)throw Error('Installed Chrome executable was not found');
+  const chrome='/opt/google/chrome/chrome';
+  // Also migrates restored VMs that do not yet have the standard Chrome package.
+  if(!fs.existsSync(chrome)){
+    state('installing_browser');
+    run('sudo',['rpm','--import','https://dl.google.com/linux/linux_signing_key.pub']);
+    run('sudo',['dnf','install','-y','--setopt=localpkg_gpgcheck=1','https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm']);
+  }
   process.env.D3K_CHROME_NO_SANDBOX='1';
   const profileDir='/tmp/d3k-cloud-chrome';
   if(config.recover){

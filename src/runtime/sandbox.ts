@@ -16,7 +16,7 @@ import {
 } from "../portless.js"
 import { connectCompanion } from "./bridge.js"
 import { portlessCertificatePin, sandboxChromePath } from "./chrome-isolation.js"
-import { type Harness, type HarnessLocation, harnessInvocation, harnessSkill } from "./harness.js"
+import { type Harness, type HarnessLocation, harnessInvocation, harnessSkill, runHarnessProcess } from "./harness.js"
 import { startLocalProxy } from "./local-proxy.js"
 import {
   configureSandboxFxGateway,
@@ -30,6 +30,7 @@ import { DEFAULT_SANDBOX_TIMEOUT_MINUTES } from "./sandbox-command.js"
 import { sandboxFxContext } from "./sandbox-context.js"
 import { discoverLegacyFxWorkspace } from "./sandbox-fx-resume.js"
 import { createSandboxGateway } from "./sandbox-gateway.js"
+import { callSandboxGithub } from "./sandbox-github.js"
 import { createLocalSandboxWorkspace, launchLocalSandboxHarness } from "./sandbox-local-harness.js"
 import { sandboxPreviewLink } from "./sandbox-preview.js"
 import { runSandboxCli } from "./sandbox-process.js"
@@ -173,7 +174,7 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
     localRoute = routing.runtime
     if (isPortlessHostnameHeld(localRoute.name))
       throw new Error(`${localRoute.url} is already in use; stop that session or choose another --hostname`)
-    const isolatedBrowserPath = await sandboxChromePath(log)
+    const isolatedBrowserPath = sandboxChromePath(log)
     if (signalReceived) return
     log(`Resolving ${options.project} through Vercel CLI`)
     const project = JSON.parse(
@@ -538,6 +539,11 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
       url: bridgeUrl,
       token: pairingToken,
       chromePort,
+      github: (args, signal) =>
+        callSandboxGithub(project.link?.type === "github" ? `${project.link.org}/${project.link.repo}` : "", args, {
+          cwd: temporary,
+          signal
+        }),
       onState: (connected) => {
         if (!closing && !signalReceived)
           log(
@@ -606,6 +612,16 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
           throw new Error(`Remote runtime exited before the harness opened (code ${remoteExit})`)
         log(`Starting local ${options.harness}; project files and commands stay in ${workdir}`)
         shellActive = true
+        if (options.harness === "eve") {
+          log("Eve: remote agent with a local terminal client; $1 model cap, up to 30 minutes")
+          log("Use /detach, then Enter to reconnect. Ctrl-C at the reconnect prompt exits and stops Eve.")
+          await runHarnessProcess(
+            "bun",
+            [fileURLToPath(new URL("../../scripts/eve/launch.mjs", import.meta.url)), "--resume", savedSession.id],
+            { cwd: temporary, signal: shellAbort.signal }
+          )
+          return
+        }
         await launchLocalSandboxHarness({
           harness: options.harness,
           directory: options.harness === "fx" ? sandboxFxWorkspace(savedSession) : join(temporary, "control"),

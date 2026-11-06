@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 import { InvalidArgumentError } from "commander"
 import { terminalRestorer } from "./terminal.js"
 
-export const HARNESS_NAMES = ["fx", "codex", "claude"] as const
+export const HARNESS_NAMES = ["fx", "codex", "claude", "eve"] as const
 export type Harness = (typeof HARNESS_NAMES)[number]
 export const HARNESS_LOCATIONS = ["local", "sandbox"] as const
 export type HarnessLocation = (typeof HARNESS_LOCATIONS)[number]
@@ -21,6 +21,10 @@ export function parseHarness(value: string): Harness {
   return value as Harness
 }
 export const bundledSkillPath = fileURLToPath(new URL("../../skills/d3k/SKILL.md", import.meta.url))
+export function pullRequestInstructions(): string {
+  const skill = readFileSync(bundledSkillPath, "utf8")
+  return skill.slice(skill.indexOf("## Pull requests"), skill.indexOf("## Lifecycle"))
+}
 export interface SandboxHarnessContext {
   workdir: string
   appUrl: string
@@ -40,12 +44,12 @@ ${runtime} browser metrics https://example.com/ --new-tab
 ${runtime} events --limit 50
 \`\`\`
 
-The browser subcommand runs the bundled agent-browser and supplies the existing CDP connection automatically. Element refs come from the latest snapshot. You do not need a CDP port, a new browser, a browser install, or another agent-browser server. Do not run bare agent-browser without the managed connection. Use the existing browser for UI testing and reproductions; do not ask the user to run browser commands for you. If disconnected, inspect status and report the connection problem instead of opening another browser. Do not start another runtime.${sandbox ? " Do not run Portless setup inside the sandbox; the laptop companion already handles it." : ""}
+After a user-visible UI change, inspect runtime status, verify the changed page through the paired browser and read the relevant events before reporting completion. The dev server is already running; you do not need to start it yourself to inspect the page. If verification fails, report the command and actual error instead of assuming the server is absent.\n\nThe browser subcommand runs the bundled agent-browser and supplies the existing CDP connection automatically. Element refs come from the latest snapshot. You do not need a CDP port, a new browser, a browser install, or another agent-browser server. Do not run bare agent-browser without the managed connection. Use the existing browser for UI testing and reproductions; do not ask the user to run browser commands for you. If disconnected, inspect status and report the connection problem instead of opening another browser. Do not start another runtime.${sandbox ? " Do not run Portless setup inside the sandbox; the laptop companion already handles it." : ""}
 
 For loading metrics, prefer browser metrics URL --new-tab over custom eval scripts. It installs observers before navigation and returns Web Vitals, navigation timing, long tasks and resource summaries as JSON. Omit the URL for a current-page snapshot without reload; CLS and long tasks are then unavailable. Results use the existing cache and throttling; null means unavailable and paint/vitals values are provisional.
 
 After responsive/device testing, run \`${runtime} browser set viewport 0 0 0\` to restore window-sized rendering. Verify the page fills the headed window before handing it back; do not leave a guessed desktop size such as 1280x900 that stays fixed when the user resizes the window.
-Await the user's instructions before modifying code.`
+${sandbox ? `For authorized branch pushes and PRs, use existing managed Git authentication if available. If remote git/gh is unauthenticated, use the laptop-authenticated publishing route: \`${runtime} github GET /git/ref/heads/main\` (check the actual base branch). Methods GET, POST and PATCH use repo-relative /git/blobs, /git/trees, /git/commits, /git/refs and /pulls. Pipe JSON bodies through stdin with --input -. Preserve remote commit author, committer, timestamps, parents and tree entries; verify the returned SHA before updating the branch ref, then POST /pulls. No force pushes. Do not request tokens or run gh auth login in the sandbox before trying this route. Credentials stay local; a disconnected companion prevents publishing. Inspect GitHub state before retrying an uncertain mutation.\n\n` : ""}Await the user's instructions before modifying code.`
 }
 export function harnessSkill(sandbox?: SandboxHarnessContext): string {
   const source = readFileSync(bundledSkillPath, "utf8")
@@ -66,6 +70,8 @@ export function harnessInvocation(
   resume = false
 ) {
   parseHarness(harness)
+  if (harness === "eve")
+    throw new Error("Eve requires a sandbox with a local client; use --project <team/project> --harness eve")
   const prompt = `The d3k connected-session skill is loaded below (also available at ${JSON.stringify(skillPath)}).\n\n${harnessStartupContext(sandbox)}`
   return {
     binary: harness,

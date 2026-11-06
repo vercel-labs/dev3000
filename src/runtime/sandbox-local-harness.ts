@@ -4,9 +4,13 @@ import { fileURLToPath } from "node:url"
 import type { Sandbox } from "@vercel/sandbox"
 import { getAgentBrowserBinaryPath } from "../utils/agent-browser.js"
 import { captureBrowserMetrics } from "./browser-metrics.js"
-import { type Harness, runHarnessProcess } from "./harness.js"
+import { configuredGitIdentity } from "./git-identity.js"
+import { type Harness, pullRequestInstructions, runHarnessProcess } from "./harness.js"
+import { callSandboxGithub } from "./sandbox-github.js"
 import { runSandboxCli } from "./sandbox-process.js"
 import { startWorkspaceBroker, workspaceHandler } from "./sandbox-workspace.js"
+
+export { workspaceGithubRequest } from "./sandbox-github.js"
 
 export function localWorkspaceInstructions(workdir: string, appUrl: string, helper: string): string {
   return `# d3k remote workspace
@@ -16,6 +20,8 @@ You are running LOCALLY. The project code, dependencies, environment, Git checko
 Connection details are refreshed on every launch. Use the helper and MCP connection below even when continuing a prior conversation; old broker addresses and credentials are invalid. Do not replay unfinished commands automatically.
 
 The app is already running at ${JSON.stringify(appUrl)} in the user's local Chrome. Use the d3k workspace tools immediately; do not discover a CDP port, install browsers, or start another runtime. Your normal local image-paste capability works here.
+
+After a user-visible UI change, inspect sandbox_runtime status, verify the changed page through sandbox_browser and read the relevant events before reporting completion. You do not need to start a dev server locally to verify the remote app. If verification fails, report the tool call and actual error; do not infer that the server is absent because you did not launch it yourself.
 
 After responsive/device testing, use sandbox_browser with args ["set","viewport","0","0","0"] to restore window-sized rendering. Verify the page fills the headed window before handing it back. Do not restore to a guessed desktop size such as 1280x900, which leaves a fixed viewport when the user resizes the window.
 
@@ -41,36 +47,7 @@ For file contents, patches, or GitHub upload bodies, pipe JSON to the helper wit
 
 If sandbox_runtime reports running:false or the app returns 502 after the dev runtime stops, call sandbox_recover with action start, then poll action status until recovered or failed. Recovery preserves this agent, remote edits and local Chrome; it does not clone, reinstall or replay your commands. Reread runtime status and reproduce after recovery because old in-memory evidence is lost. If recovery fails, report the error and preserve edits.
 
-Read the remote project's AGENTS.md and any narrower instructions before editing. Use remote shell searches and patch commands for focused edits; sandbox_write_file writes the entire file. Run tests, Git branches, and commits remotely. For publishing, use sandbox_github with repo-relative Git Data API paths to upload the remote commit's blobs, trees, commits, and branch ref, then create /pulls. It authenticates locally against only this project's linked repository; do not copy GitHub credentials into the sandbox. Preserve remote commit author, committer, timestamps and parents when publishing; confirm returned commit SHA matches. Existing remote Git authentication can also be used for git push. Use sandbox_runtime status before a reproduction, then events --session ID --after CURSOR afterward; reset or dropped events mean an evidence gap. Use the existing browser autonomously for UI checks. Batch related remote commands to reduce network round trips. Shell calls have a 60-second deadline; a timeout does not prove the command stopped, so inspect remote state before retrying mutations. Report disconnected tools instead of falling back to a local checkout. Await the user's task before modifying project code.`
-}
-
-export function workspaceGithubRequest(repository: string, args: Record<string, unknown>) {
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error("No linked GitHub repository")
-  const method = String(args.method)
-  const path = String(args.path)
-  if (
-    !["GET", "POST", "PATCH"].includes(method) ||
-    !/^\/(git\/(blobs|trees|commits|refs?|matching-refs)|pulls)(\/|\?|$)[\w/?.=&%-]*$/.test(path) ||
-    path.includes("..") ||
-    path.includes("%") ||
-    path.includes("//")
-  )
-    throw new Error("Use a supported repo-relative Git Data or pulls endpoint")
-  if (args.body && (typeof args.body !== "object" || Array.isArray(args.body)))
-    throw new Error("body must be an object")
-  if ((args.body as { force?: unknown } | undefined)?.force) throw new Error("Force pushes are not supported")
-  return {
-    args: [
-      "api",
-      "--hostname",
-      "github.com",
-      "--method",
-      method,
-      `repos/${repository}${path}`,
-      ...(args.body ? ["--input", "-"] : [])
-    ],
-    input: args.body ? JSON.stringify(args.body) : undefined
-  }
+${pullRequestInstructions()}\n\nRead the remote project's AGENTS.md and any narrower instructions before editing. Use remote shell searches and patch commands for focused edits; sandbox_write_file writes the entire file. Run tests, Git branches, and commits remotely. For publishing, use sandbox_github with repo-relative Git Data API paths to upload the remote commit's blobs, trees, commits, and branch ref, then create /pulls. It authenticates locally against only this project's linked repository; do not copy GitHub credentials into the sandbox. Preserve remote commit author, committer, timestamps and parents when publishing; confirm returned commit SHA matches. Existing remote Git authentication can also be used for git push. Use sandbox_runtime status before a reproduction, then events --session ID --after CURSOR afterward; reset or dropped events mean an evidence gap. Use the existing browser autonomously for UI checks. Batch related remote commands to reduce network round trips. Shell calls have a 60-second deadline; a timeout does not prove the command stopped, so inspect remote state before retrying mutations. Report disconnected tools instead of falling back to a local checkout. Await the user's task before modifying project code.`
 }
 
 export function prepareLocalSandboxHarness(
@@ -126,21 +103,7 @@ export interface LocalSandboxWorkspaceOptions {
 /** Shared by terminal harnesses and desktop MCP; credentials stay in this process. */
 export async function createLocalSandboxWorkspace(options: LocalSandboxWorkspaceOptions) {
   mkdirSync(options.directory, { recursive: true, mode: 0o700 })
-  const [name, email] = await Promise.all(
-    ["user.name", "user.email"].map((key) =>
-      runSandboxCli("git", ["config", "--get", key], {
-        cwd: options.directory,
-        timeoutMs: 5000,
-        signal: options.signal
-      })
-        .then((value) => value.trim())
-        .catch(() => "")
-    )
-  )
-  const gitIdentity =
-    name && email
-      ? { GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email }
-      : undefined
+  const gitIdentity = await configuredGitIdentity(runSandboxCli, options.directory, options.signal)
   const remote = workspaceHandler(options.sandbox, options.workdir, gitIdentity)
   return async (name: string, args: Record<string, unknown>) => {
     if (name === "sandbox_recover") {
@@ -149,11 +112,8 @@ export async function createLocalSandboxWorkspace(options: LocalSandboxWorkspace
     }
     let output: string
     if (name === "sandbox_github") {
-      const request = workspaceGithubRequest(options.repository || "", args)
-      output = await runSandboxCli("gh", request.args, {
-        input: request.input,
+      output = await callSandboxGithub(options.repository || "", args, {
         cwd: options.directory,
-        timeoutMs: 60000,
         signal: options.signal
       })
     } else if (name === "sandbox_browser") {

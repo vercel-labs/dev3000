@@ -66,6 +66,10 @@ export async function finishTerminalCleanup(
   if (!message) return
   await nextTurn()
   await new Promise<void>((resolve, reject) => {
-    output.write(`${message}\n`, (error) => (error ? reject(error) : resolve()))
+    // TUIs may leave the cursor inside an existing transcript row. Clear the
+    // whole row so a shorter resume command cannot retain the old text's suffix.
+    output.write(output.isTTY ? `\r\x1b[2K${message}\r\n` : `${message}\n`, (error) =>
+      error ? reject(error) : resolve()
+    )
   })
 }

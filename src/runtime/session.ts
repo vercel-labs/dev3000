@@ -41,7 +41,7 @@ export function readRuntimeSession(cwd = process.cwd()): RuntimeSession | null {
   }
 }
 
-export async function queryRuntime(path: string, cwd = process.cwd(), method = "GET"): Promise<unknown> {
+export async function queryRuntime(path: string, cwd = process.cwd(), method = "GET", body?: string): Promise<unknown> {
   const session = readRuntimeSession(cwd)
   if (!session) throw new Error("No active skill runtime for this project")
   return new Promise((resolveResult, reject) => {
@@ -65,8 +65,10 @@ export async function queryRuntime(path: string, cwd = process.cwd(), method = "
         })
       }
     )
-    req.setTimeout(5000, () => req.destroy(new Error("Runtime request timed out")))
+    req.setTimeout(path === "/github" ? 70000 : 5000, () =>
+      req.destroy(new Error("Runtime request timed out; inspect state before retrying mutations"))
+    )
     req.on("error", reject)
-    req.end()
+    req.end(body)
   })
 }

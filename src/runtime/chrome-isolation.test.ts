@@ -1,11 +1,46 @@
-import { execFileSync, spawnSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { execFile, execFileSync, spawnSync } from "node:child_process"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { promisify } from "node:util"
 import { describe, expect, it } from "vitest"
 import { isolatedChromeInvocation } from "./chrome-isolation.js"
 
 describe.skipIf(process.platform !== "darwin")("Chrome filesystem confinement", () => {
+  const installedChrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  it.skipIf(!existsSync(installedChrome))(
+    "starts installed Chrome under confinement with a dedicated profile",
+    async () => {
+      const directory = mkdtempSync(join(tmpdir(), "d3k-installed-chrome-test-"))
+      const profile = join(directory, "profile")
+      try {
+        const invocation = isolatedChromeInvocation(
+          installedChrome,
+          [
+            `--user-data-dir=${profile}`,
+            "--headless=new",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-background-networking",
+            "--disable-gpu",
+            "--dump-dom",
+            "data:text/html,<p>d3k-confined-chrome-ready</p>"
+          ],
+          profile
+        )
+        const { stdout } = await promisify(execFile)(invocation.binary, invocation.args, {
+          env: invocation.env,
+          timeout: 20000,
+          maxBuffer: 1024 * 1024
+        })
+        expect(stdout).toContain("<p>d3k-confined-chrome-ready</p>")
+        expect(invocation.args[1]).toContain("com.apple.pasteboard.1")
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
+      }
+    },
+    30000
+  )
   it("permits session files but denies unrelated files and symlink escapes for inherited child processes", () => {
     const directory = mkdtempSync(join(tmpdir(), "d3k-isolation-test-"))
     const profile = join(directory, "profile")
