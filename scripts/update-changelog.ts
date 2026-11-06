@@ -126,9 +126,12 @@ function determineVersionType(highlights: string[], versionBump: string): Releas
 }
 
 // Function to update the changelog data file
-function updateChangelogPage(version: string, highlights: string[], versionType: ReleaseType): void {
-  const changelogPath = path.join(__dirname, "../www/lib/changelog.ts")
-
+function updateChangelogPage(
+  version: string,
+  highlights: string[],
+  versionType: ReleaseType,
+  changelogPath = path.join(__dirname, "../www/lib/changelog.ts")
+): void {
   if (!fs.existsSync(changelogPath)) {
     console.log("⚠️ Changelog data file not found, skipping update")
     return
@@ -165,11 +168,11 @@ function updateChangelogPage(version: string, highlights: string[], versionType:
 
   // Create the new entry text
   const newEntryText = `  {
-    version: "${newEntry.version}",
-    date: "${newEntry.date}",
-    type: "${newEntry.type}",
+    version: ${JSON.stringify(newEntry.version)},
+    date: ${JSON.stringify(newEntry.date)},
+    type: ${JSON.stringify(newEntry.type)},
     highlights: [
-${newEntry.highlights.map((h) => `      "${h.replace(/"/g, '\\"')}"`).join(",\n")}
+${newEntry.highlights.map((h) => `      ${JSON.stringify(h)}`).join(",\n")}
     ]
   }`
 
@@ -179,15 +182,15 @@ ${newEntry.highlights.map((h) => `      "${h.replace(/"/g, '\\"')}"`).join(",\n"
     // Empty array
     updatedContent = content.replace(
       "export const changelog: Release[] = []",
-      `export const changelog: Release[] = [\n${newEntryText}\n]`
+      () => `export const changelog: Release[] = [\n${newEntryText}\n]`
     )
   } else {
     // Add to beginning of existing array
     updatedContent = content.replace(
       changelogStartRegex,
-      `export const changelog: Release[] = [
+      (_match, previous: string) => `export const changelog: Release[] = [
 ${newEntryText},
-$1]`
+${previous}]`
     )
   }
 
