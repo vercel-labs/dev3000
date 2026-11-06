@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.191",
     date: "2026-11-06",
     type: "patch",
-    highlights: [
-      "Keep macOS Chrome startup inside its isolated profile"
-    ]
+    highlights: ["Keep macOS Chrome startup inside its isolated profile"]
   },
 
   {
