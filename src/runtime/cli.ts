@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs"
 import { Command } from "commander"
 import { getPortlessProxyStatus, installPortlessService } from "../portless.js"
 import { getAgentBrowserBinaryPath } from "../utils/agent-browser.js"
+import { captureBrowserLoading } from "./browser-capture.js"
+import { compareBrowserCaptures } from "./browser-compare.js"
 import { captureBrowserMetrics } from "./browser-metrics.js"
 import { readRecentEvents, selectEventView } from "./event-views.js"
 import { publishGithub } from "./github-publish.js"
@@ -201,6 +203,7 @@ program
   .allowUnknownOption()
   .argument("[args...]")
   .action(async (args: string[]) => {
+    if (args[0] === "compare") return print(await compareBrowserCaptures(args.slice(1)))
     const session = (await queryRuntime("/status")) as RuntimeSession
     if (!session?.ready || !session.cdpUrl) throw new Error("The managed browser is not ready")
     if (
@@ -212,9 +215,9 @@ program
     )
       throw new Error("Browser ownership options are managed by the runtime")
     const port = new URL(session.cdpUrl).port
-    if (args[0] === "metrics") {
+    if (args[0] === "metrics" || args[0] === "capture") {
       return print(
-        await captureBrowserMetrics(args.slice(1), (command) =>
+        await (args[0] === "capture" ? captureBrowserLoading : captureBrowserMetrics)(args.slice(1), (command) =>
           runSandboxCli(
             getAgentBrowserBinaryPath(),
             ["--session", `d3k-${session.sessionId}`, "--cdp", port, ...command],

@@ -24,6 +24,13 @@ export function distributionFingerprint(root: string): string {
   return hash.digest("hex")
 }
 
+// Resolve against remote files, using the exact d3k distribution installed in the VM.
+export const dependencyInstallPlanScript = `
+const { pathToFileURL } = await import('node:url');
+const { dependencyInstallPlan } = await import(pathToFileURL(process.argv[1]).href);
+console.log(JSON.stringify(dependencyInstallPlan(process.cwd(), process.argv[2], process.argv[3])));
+`
+
 // Runs in the repository. Include workspace manifests and lockfiles, including
 // uncommitted edits. Save only after a successful install, which can update locks.
 export const dependencyCacheScript = `
@@ -36,7 +43,7 @@ const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {encoding:'ut
 const files = [...new Set(execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {cwd:root, encoding:'utf8'}).split('\\0').filter(Boolean))].sort();
 const hash = createHash('sha256').update(seed).update(process.version).update(process.arch).update(process.platform);
 for (const name of files) {
-  if (!/^(package.json|bun.lockb?|package-lock.json|yarn.lock|pnpm-lock.yaml|pnpm-workspace.yaml|bunfig.toml|.npmrc)$/.test(path.basename(name))) continue;
+  if (!/^(package.json|bun.lockb?|package-lock.json|npm-shrinkwrap.json|yarn.lock|pnpm-lock.yaml|pnpm-workspace.yaml|bunfig.toml|.npmrc|.yarnrc.yml)$/.test(path.basename(name))) continue;
   const file = path.join(root, name);
   if (fs.existsSync(file)) hash.update(name).update('\\0').update(fs.readFileSync(file)).update('\\0');
 }
@@ -48,7 +55,7 @@ if (mode === 'save') {
   let directory = process.cwd();
   let installed = false;
   for (;;) {
-    installed ||= fs.existsSync(path.join(directory, 'node_modules'));
+    installed ||= ['node_modules', '.pnp.cjs', '.pnp.js'].some(name => fs.existsSync(path.join(directory, name)));
     if (directory === root || directory === path.dirname(directory)) break;
     directory = path.dirname(directory);
   }

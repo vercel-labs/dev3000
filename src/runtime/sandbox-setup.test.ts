@@ -1,13 +1,14 @@
 import { execFileSync, spawnSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it } from "vitest"
-import { dependencyCacheScript, distributionFingerprint } from "./sandbox-setup"
+import { dependencyCacheScript, dependencyInstallPlanScript, distributionFingerprint } from "./sandbox-setup"
 
 const directories: string[] = []
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "d3k-setup-"))
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "d3k-setup-")))
   directories.push(root)
   execFileSync("git", ["init", "--quiet", root])
   writeFileSync(join(root, ".gitignore"), "node_modules/\nsetup.sha256\n")
@@ -22,6 +23,28 @@ afterEach(() => {
 })
 
 describe("sandbox setup reuse", () => {
+  it("resolves the install plan through the remote process entry point", () => {
+    const { root } = fixture()
+    writeFileSync(join(root, "package.json"), '{"packageManager":"npm@11.6.2"}')
+    const cwd = join(root, "apps/web")
+    mkdirSync(cwd, { recursive: true })
+    writeFileSync(join(cwd, "package.json"), "{}")
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        dependencyInstallPlanScript,
+        fileURLToPath(new URL("./package-manager.ts", import.meta.url)),
+        root
+      ],
+      { cwd, encoding: "utf8" }
+    )
+    expect(result.stderr).toBe("")
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual({ command: "npm install", cwd: root })
+  })
+
   it("reuses successful installs, but invalidates workspace edits, locks, settings and missing dependencies", () => {
     const { root, run } = fixture()
     expect(run("check").status).toBe(10)
@@ -49,5 +72,18 @@ describe("sandbox setup reuse", () => {
     expect(distributionFingerprint(root)).toBe(before)
     writeFileSync(join(root, "dist", "cli.js"), "version two")
     expect(distributionFingerprint(root)).not.toBe(before)
+  })
+
+  it("reuses Yarn PnP installs and invalidates Yarn settings and npm shrinkwrap changes", () => {
+    const { root, run } = fixture()
+    rmSync(join(root, "node_modules"), { recursive: true })
+    writeFileSync(join(root, ".pnp.cjs"), "// Yarn loader")
+    expect(run("save").status).toBe(0)
+    expect(run("check").status).toBe(0)
+    for (const name of [".yarnrc.yml", "npm-shrinkwrap.json"]) {
+      writeFileSync(join(root, name), "changed install input")
+      expect(run("check").status).toBe(10)
+      expect(run("save").status).toBe(0)
+    }
   })
 })

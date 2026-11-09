@@ -9,6 +9,7 @@ const state=phase=>fs.writeFileSync('/tmp/d3k-cloud-state.json',JSON.stringify({
 const run=(command,args,cwd)=>{
   const result=spawnSync(command,args,{cwd,env:process.env,encoding:'utf8',maxBuffer:4*1024*1024});
   if(result.status!==0) throw Error(command+' failed: '+(result.stderr||result.error||'').toString().slice(-2000));
+  return result.stdout;
 };
 try {
   process.env.PATH='/tmp/d3k-bun/node_modules/.bin:/tmp/d3k-tools/node_modules/.bin:'+(process.env.PATH||'/usr/local/bin:/usr/bin:/bin');
@@ -34,7 +35,13 @@ try {
     }
   }
   process.chdir(config.workdir);
-  if(!config.recover){state('installing_project');run('sh',['-c',config.installCommand||'bun install'],config.workdir);}
+  if(!config.recover){
+    state('installing_project');
+    const {dependencyInstallPlan}=await import('/tmp/d3k-tools/node_modules/dev3000/dist/runtime/package-manager.js');
+    const root=run('git',['rev-parse','--show-toplevel'],config.workdir).trim();
+    const plan=dependencyInstallPlan(config.workdir,root,config.installCommand);
+    run('sh',['-c',plan.command],plan.cwd);
+  }
   state('starting');
   const {startRuntime}=await import('/tmp/d3k-tools/node_modules/dev3000/dist/runtime/runtime.js');
   await startRuntime({command:config.command||undefined,headless:true,browser:chrome,profileDir,startupTimeout:300000,sandbox:{appUrl:config.preview.origin,serverPort:3000,bridgePort:9223,token:config.unusedBridgeToken,preview:config.preview,cloudBrowser:true}});

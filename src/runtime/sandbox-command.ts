@@ -31,7 +31,7 @@ export function addSandboxProjectOptions(command: Command): Command {
     .option("--timeout <minutes>", "Sandbox compute and Gateway key lifetime", String(DEFAULT_SANDBOX_TIMEOUT_MINUTES))
     .option(
       "--install-command <command>",
-      "Remote dependency install command (otherwise project setting or bun install)"
+      "Remote dependency install command (otherwise project setting or detected package manager)"
     )
     .option("--no-shell", "Keep the companion running without opening an interactive remote shell")
     .option("--no-fx", "Skip fx installation")

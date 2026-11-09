@@ -30,8 +30,10 @@ import { DEFAULT_SANDBOX_TIMEOUT_MINUTES } from "./sandbox-command.js"
 import { sandboxFxContext } from "./sandbox-context.js"
 import { discoverLegacyFxWorkspace } from "./sandbox-fx-resume.js"
 import { createSandboxGateway } from "./sandbox-gateway.js"
+import { sandboxGitCredentials } from "./sandbox-git.js"
 import { callSandboxGithub } from "./sandbox-github.js"
 import { createLocalSandboxWorkspace, launchLocalSandboxHarness } from "./sandbox-local-harness.js"
+import { SANDBOX_APP_PORT, SANDBOX_BRIDGE_PORT, SANDBOX_PROXY_PORT, sandboxExposedPorts } from "./sandbox-ports.js"
 import { sandboxPreviewLink } from "./sandbox-preview.js"
 import { runSandboxCli } from "./sandbox-process.js"
 import { sandboxRecovery } from "./sandbox-recovery.js"
@@ -42,15 +44,13 @@ import {
   sandboxFxWorkspace,
   saveSandboxSession
 } from "./sandbox-sessions.js"
-import { dependencyCacheScript, distributionFingerprint } from "./sandbox-setup.js"
+import { dependencyCacheScript, dependencyInstallPlanScript, distributionFingerprint } from "./sandbox-setup.js"
 import { runSandboxShell, SandboxShellDisconnected } from "./sandbox-shell.js"
 import { watchSandboxRuntime } from "./sandbox-watch.js"
 import { finishTerminalCleanup, holdTerminalForCleanup } from "./terminal.js"
 
 const REMOTE_TOOLS = SANDBOX_TOOLS
 const REMOTE_ENTRY = `${REMOTE_TOOLS}/node_modules/dev3000/dist/runtime/cli.js`
-const APP_PORT = 3000
-const BRIDGE_PORT = 9223
 
 export interface SandboxOptions {
   project: string
@@ -199,22 +199,29 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
       sandbox = await Sandbox.get({ ...credentials, name: options.attach, signal: shellAbort.signal })
       await sandbox.update({ timeout: timeoutMinutes * 60000 })
       const ports = sandbox.routes.map((route) => route.port)
-      if (!ports.includes(APP_PORT) || !ports.includes(BRIDGE_PORT)) {
+      const exposedPorts = sandboxExposedPorts(ports)
+      if (ports.length !== exposedPorts.length || exposedPorts.some((port) => !ports.includes(port))) {
         originalPorts = ports
-        await sandbox.update({ ports: [...new Set([...ports, APP_PORT, BRIDGE_PORT])] })
+        await sandbox.update({ ports: exposedPorts })
       }
     } else {
       if (project.link?.type !== "github" || !project.link.org || !project.link.repo)
         throw new Error("This project needs a linked GitHub repository")
       const repository = `${project.link.org}/${project.link.repo}`
-      log("Creating a sandbox and cloning the linked public repository remotely")
+      const managedGit = await sandboxGitCredentials(project, run)
+      log(
+        managedGit.__source_credentials
+          ? "Cloning the linked repository with Vercel managed Git (6 vCPUs required by the current platform workaround)"
+          : "Creating a sandbox and cloning the linked repository remotely (public access)"
+      )
       sandbox = await Sandbox.create({
         ...credentials,
+        ...managedGit,
         signal: shellAbort.signal,
         ...(options.name ? { name: options.name } : {}),
         ...(options.region ? { region: options.region as SandboxRegion } : {}),
         timeout: timeoutMinutes * 60000,
-        ports: [APP_PORT, BRIDGE_PORT],
+        ports: sandboxExposedPorts(),
         source: {
           type: "git",
           url: `https://github.com/${repository}.git`,
@@ -222,7 +229,7 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
         }
       }).catch((error: unknown) => {
         throw new Error(
-          `Could not create the sandbox from ${repository}${options.branch ? ` at ${options.branch}` : ""}: ${error instanceof Error ? error.message : "Unknown creation error"}. Check Sandbox access, connectivity, and that the repository and requested revision are publicly accessible. This failure does not establish that the repository is private. No existing checkout was reused.`,
+          `Could not create the sandbox from ${repository}${options.branch ? ` at ${options.branch}` : ""}: ${error instanceof Error ? error.message : "Unknown creation error"}. ${managedGit.__source_credentials ? "Check the project's managed Git flags, repository authorization, GitHub App installation, requested revision, and effective limits for the required 6-vCPU cold allocation. Managed Git failures are not retried with laptop credentials." : "Private repositories require Vercel managed Git onboarding: enable the project's Sandbox Git credentials and signed-commits flags and authorize the linked repository with a git:write Bound. Alternatively, attach an already provisioned sandbox with --attach <name>."} No existing checkout was reused.`,
           { cause: error }
         )
       })
@@ -389,10 +396,29 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
       args: ["-f", `${SANDBOX_AGENT_DIRECTORY}/gateway.json`, `${SANDBOX_AGENT_BIN}/fx`]
     })
     if (legacyCleanup.exitCode !== 0) throw new Error("Could not remove legacy sandbox harness credentials")
-    const setup = options.installCommand || project.installCommand || "bun install"
+    const planResult = await sandbox.runCommand({
+      cmd: "node",
+      args: [
+        "--input-type=module",
+        "-e",
+        dependencyInstallPlanScript,
+        `${REMOTE_TOOLS}/node_modules/dev3000/dist/runtime/package-manager.js`,
+        repositoryRoot,
+        options.installCommand || project.installCommand || ""
+      ],
+      cwd: workdir,
+      signal: shellAbort.signal
+    })
+    if (planResult.exitCode !== 0)
+      throw new Error(`Could not determine project dependency setup: ${(await planResult.stderr()).slice(-4000)}`)
+    const { command: setup, cwd: installCwd } = JSON.parse(await planResult.stdout()) as {
+      command: string
+      cwd: string
+    }
     const dependencyMarker = `${REMOTE_TOOLS}/dependencies-${createHash("sha256").update(workdir).digest("hex")}.sha256`
     const dependencySeed = createHash("sha256")
       .update(setup)
+      .update(installCwd)
       .update(JSON.stringify(Object.entries(appEnv).sort()))
       .digest("hex")
     const setupSandbox = sandbox
@@ -413,7 +439,7 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
       const installed = await sandbox.runCommand({
         cmd: "sh",
         args: ["-c", setup],
-        cwd: workdir,
+        cwd: installCwd,
         env: appEnv,
         timeoutMs: 300000,
         signal: shellAbort.signal
@@ -429,18 +455,26 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
       fxBinary = await prepareSandboxFx(sandbox)
     }
     if (signalReceived) return
-    const upstreamUrl = sandbox.domain(APP_PORT)
+    const upstreamUrl = sandbox.domain(SANDBOX_PROXY_PORT)
     const appUrl = localRoute.url
     const proxyToken = randomBytes(32).toString("hex")
     localProxy = await startLocalProxy({ appUrl, upstreamUrl, token: proxyToken })
     registerPortlessAlias(localRoute, localProxy.port)
     aliasRegistered = true
-    const bridgeUrl = `${sandbox.domain(BRIDGE_PORT).replace(/^https:/, "wss:")}/bridge`
+    const bridgeUrl = `${sandbox.domain(SANDBOX_BRIDGE_PORT).replace(/^https:/, "wss:")}/bridge`
     const pairingToken = randomBytes(32).toString("hex")
     const preview = options.preview
       ? { origin: new URL(upstreamUrl).origin, token: randomBytes(32).toString("hex"), expiresAt }
       : undefined
-    const config = { appUrl, serverPort: APP_PORT, bridgePort: BRIDGE_PORT, token: pairingToken, proxyToken, preview }
+    const config = {
+      appUrl,
+      appPort: SANDBOX_APP_PORT,
+      serverPort: SANDBOX_PROXY_PORT,
+      bridgePort: SANDBOX_BRIDGE_PORT,
+      token: pairingToken,
+      proxyToken,
+      preview
+    }
     const args = [REMOTE_ENTRY, "sandbox-serve", "--startup-timeout", "300000"]
     const command = options.command || project.devCommand
     if (command) args.push("--command", command)

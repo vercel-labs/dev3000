@@ -3,6 +3,8 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Sandbox } from "@vercel/sandbox"
 import { getAgentBrowserBinaryPath } from "../utils/agent-browser.js"
+import { captureBrowserLoading } from "./browser-capture.js"
+import { compareBrowserCaptures } from "./browser-compare.js"
 import { captureBrowserMetrics } from "./browser-metrics.js"
 import { configuredGitIdentity } from "./git-identity.js"
 import { type Harness, pullRequestInstructions, runHarnessProcess } from "./harness.js"
@@ -42,6 +44,7 @@ ${helper} sandbox_github '{"method":"GET","path":"/git/ref/heads/main"}'
 \`\`\`
 
 For loading metrics, prefer sandbox_browser args ["metrics","https://example.com/","--new-tab"] over custom eval scripts. It installs observers before navigation and returns Web Vitals, navigation timing, long tasks and resource summaries as JSON. Omit the URL for a current-page snapshot without reload; CLS and long tasks are then unavailable. Results use the existing cache and throttling; null means unavailable and paint/vitals values are provisional.
+For user-requested page/UI changes and loading/jank investigations, capture BEFORE editing with sandbox_browser args ["capture",URL,"--output","/absolute/new-before-dir","--ready","#ready"], then repeat the identical scenario after edits into a new directory. Limit captures to affected pages; skip backend-only work or if the user asks to skip recording. Optional --actions JSON accepts CSS click, pixel scroll and CSS waitFor steps, e.g. [{"click":"#expand"},{"scroll":600}]. Use idempotent actions; d3k repeats them three times and does not reset app data. Compare with ["compare","/absolute/new-before-dir","/absolute/new-after-dir","--output","/absolute/report.html"]. Paths are on the LOCAL laptop companion, not the remote project. Inspect videos and median/range metrics before claiming an improvement. These are local lab measurements; interaction maxima are not INP and animation gaps are not compositor dropped-frame counts. Keep the tab visible. Capture each page separately.
 
 For file contents, patches, or GitHub upload bodies, pipe JSON to the helper with a final \`-\` argument instead of putting large JSON in command-line arguments: \`producer | ${helper} sandbox_github -\`. Keep project contents in tool input/output memory rather than local files. sandbox_github accepts method (GET, POST, PATCH), repo-relative path, and optional body (JSON object). For example, POST /git/blobs takes body {"content":"BASE64","encoding":"base64"}; POST /pulls takes body {"title":"...","head":"feature-branch","base":"main","body":"...","draft":true}. Check isError in helper responses and exitCode in remote command results before continuing.
 
@@ -128,13 +131,25 @@ export async function createLocalSandboxWorkspace(options: LocalSandboxWorkspace
         )
       )
         throw new Error("Use browser interaction arguments; the connection is managed by d3k")
-      if (args.args[0] === "metrics") {
-        const metrics = await captureBrowserMetrics(args.args.slice(1) as string[], (command) =>
-          runSandboxCli(
-            getAgentBrowserBinaryPath(),
-            ["--session", `d3k-local-${options.sessionId}`, "--cdp", String(options.chromePort), ...command],
-            { cwd: options.directory, timeoutMs: 30000, signal: options.signal }
-          )
+      if (args.args[0] === "compare") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(await compareBrowserCaptures(args.args.slice(1) as string[]))
+            }
+          ]
+        }
+      }
+      if (args.args[0] === "metrics" || args.args[0] === "capture") {
+        const metrics = await (args.args[0] === "capture" ? captureBrowserLoading : captureBrowserMetrics)(
+          args.args.slice(1) as string[],
+          (command) =>
+            runSandboxCli(
+              getAgentBrowserBinaryPath(),
+              ["--session", `d3k-local-${options.sessionId}`, "--cdp", String(options.chromePort), ...command],
+              { cwd: options.directory, timeoutMs: 30000, signal: options.signal }
+            )
         )
         return { content: [{ type: "text" as const, text: JSON.stringify(metrics) }] }
       }

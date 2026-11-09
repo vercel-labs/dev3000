@@ -70,7 +70,10 @@ export function isolatedChromeInvocation(binary: string, args: string[], profile
       LANG: "en_US.UTF-8",
       HOME: directory,
       CFFIXED_USER_HOME: directory,
-      TMPDIR: temporary
+      TMPDIR: temporary,
+      // Chromium's macOS GetTempDir checks this instead of TMPDIR. Keep native
+      // recording stream files inside the already permitted profile directory.
+      MAC_CHROMIUM_TMPDIR: temporary
     }
   }
 }
