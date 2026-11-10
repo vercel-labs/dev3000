@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.192] - 2026-11-10
+
+**Feature Release**
+
+- Add loading video comparisons and improve sandbox project setup (#126)
+
 ## [0.0.191] - 2026-11-06
 
 **Patch Release**
