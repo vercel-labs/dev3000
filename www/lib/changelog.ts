@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.192",
     date: "2026-11-10",
     type: "minor",
-    highlights: [
-      "Add loading video comparisons and improve sandbox project setup (#126)"
-    ]
+    highlights: ["Add loading video comparisons and improve sandbox project setup (#126)"]
   },
 
   {
