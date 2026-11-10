@@ -14,7 +14,13 @@ export async function runWorkspaceClient(configPath: string, args: string[]) {
       redirect: "error",
       headers: { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ name, arguments: parameters }),
-      signal: AbortSignal.timeout(70000)
+      // Up to five 60-second recordings, plus warmup, connection and cleanup.
+      // Keep ordinary remote shell requests on their existing short deadline.
+      signal: AbortSignal.timeout(
+        name === "sandbox_browser" && Array.isArray(parameters.args) && parameters.args[0] === "capture"
+          ? 600000
+          : 70000
+      )
     })
     if (!response.ok) throw new Error("The d3k workspace connection ended; resume the session")
     return response.json()

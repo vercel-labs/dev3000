@@ -37,7 +37,7 @@ export function metricsObserverScript(key: string): string {
   })()`
 }
 
-function snapshotScript(key: string): string {
+export function snapshotScript(key: string): string {
   return `JSON.stringify({url:location.href,capturedAt:new Date().toISOString(),observedUntilMs:performance.now(),navigation:performance.getEntriesByType('navigation')[0]?.toJSON()||null,paint:performance.getEntriesByType('paint').map(e=>({name:e.name,startTime:e.startTime})),resourceCount:performance.getEntriesByType('resource').length,resources:performance.getEntriesByType('resource').slice(0,500).map(e=>({name:e.name,initiatorType:e.initiatorType,duration:e.duration,transferSize:e.transferSize,encodedBodySize:e.encodedBodySize,decodedBodySize:e.decodedBodySize})),observation:globalThis[${JSON.stringify(key)}]||null})`
 }
 

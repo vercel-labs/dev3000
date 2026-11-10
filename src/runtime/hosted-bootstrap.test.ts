@@ -13,6 +13,7 @@ describe("hosted browser bootstrap", () => {
     const states: string[] = []
     const removed: string[] = []
     const startRuntime = vi.fn(async () => {})
+    const dependencyInstallPlan = vi.fn(() => ({ command: "pnpm install", cwd: "/vercel" }))
     const process = {
       env: { PATH: "/usr/bin" },
       chdir: vi.fn(),
@@ -25,6 +26,10 @@ describe("hosted browser bootstrap", () => {
     const source = cloudBootstrap
       .replace(/^import .*;$/gm, "")
       .replace(
+        "const {dependencyInstallPlan}=await import('/tmp/d3k-tools/node_modules/dev3000/dist/runtime/package-manager.js');",
+        "const {dependencyInstallPlan}=packageManager;"
+      )
+      .replace(
         "const {startRuntime}=await import('/tmp/d3k-tools/node_modules/dev3000/dist/runtime/runtime.js');",
         "const {startRuntime}=runtime;"
       )
@@ -32,6 +37,7 @@ describe("hosted browser bootstrap", () => {
       process,
       path: { join },
       runtime: { startRuntime },
+      packageManager: { dependencyInstallPlan },
       fs: {
         existsSync: () => installed,
         writeFileSync: (_path: string, value: string) => states.push(JSON.parse(value).phase),
@@ -39,11 +45,18 @@ describe("hosted browser bootstrap", () => {
       },
       spawnSync: (command: string, args: string[]) => {
         commands.push({ command, args })
-        return { status: 0 }
+        return { status: 0, stdout: command === "git" ? "/vercel\n" : "" }
       }
     })
     expect(process.exitCode).toBe(0)
     expect(states.at(-1)).toBe("ready")
+    if (recover) {
+      expect(dependencyInstallPlan).not.toHaveBeenCalled()
+      expect(commands.some(({ command }) => command === "sh")).toBe(false)
+    } else {
+      expect(dependencyInstallPlan).toHaveBeenCalledWith("/vercel/project", "/vercel", undefined)
+      expect(commands).toContainEqual({ command: "sh", args: ["-c", "pnpm install"] })
+    }
     expect(startRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
         browser: "/opt/google/chrome/chrome",

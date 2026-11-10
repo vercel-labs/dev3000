@@ -18,6 +18,7 @@ import { getPortlessName } from "../utils/project-name.js"
 import { startBridge } from "./bridge.js"
 import { createBrowserEventRecorder } from "./browser-events.js"
 import { type Harness, launchLocalHarness, parseHarness } from "./harness.js"
+import { detectPackageManager, packageManagerRunner } from "./package-manager.js"
 import type { SandboxPreview } from "./sandbox-preview.js"
 import { startSandboxProxy } from "./sandbox-proxy.js"
 import { queryRuntime, type RuntimeSession, readRuntimeSession, runtimePaths } from "./session.js"
@@ -51,7 +52,10 @@ export interface RuntimeOptions {
   /** Sandbox mode uses the companion’s stable local HTTPS origin; only the companion needs Portless. */
   sandbox?: {
     appUrl: string
+    /** Exposed authenticated proxy port. */
     serverPort: number
+    /** Private app listener; omitted by older launchers, which use an ephemeral port. */
+    appPort?: number
     bridgePort: number
     token: string
     proxyToken?: string
@@ -80,18 +84,8 @@ async function freePort(): Promise<number> {
 function defaultCommand(cwd: string): string {
   const pkg = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8"))
   if (!pkg.scripts?.dev) throw new Error("No dev script; pass --command with the project's dev command")
-  const manager =
-    typeof pkg.packageManager === "string"
-      ? pkg.packageManager.split("@")[0]
-      : existsSync(join(cwd, "bun.lock")) || existsSync(join(cwd, "bun.lockb"))
-        ? "bun"
-        : existsSync(join(cwd, "pnpm-lock.yaml"))
-          ? "pnpm"
-          : existsSync(join(cwd, "yarn.lock"))
-            ? "yarn"
-            : "npm"
-  if (!["bun", "pnpm", "yarn", "npm"].includes(manager)) throw new Error("Unknown package manager; pass --command")
-  return `${manager} run dev`
+  const { manager } = detectPackageManager(cwd)
+  return `${packageManagerRunner(manager)} run dev`
 }
 
 /** Own the server, browser, and evidence until the retained process is stopped. */
@@ -293,7 +287,9 @@ export async function startRuntime(options: RuntimeOptions = {}): Promise<void> 
     if (process.platform !== "win32") chmodSync(paths.socketPath, 0o600)
     persist()
     if (options.sandbox) {
-      serverPort = await freePort()
+      serverPort = options.sandbox.appPort ?? (await freePort())
+      if (serverPort === options.sandbox.serverPort || serverPort === options.sandbox.bridgePort)
+        throw new Error("The app port must differ from the sandbox proxy and browser bridge ports")
       proxy = await startSandboxProxy({
         port: options.sandbox.serverPort,
         targetPort: serverPort,

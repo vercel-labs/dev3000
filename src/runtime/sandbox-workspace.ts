@@ -60,7 +60,7 @@ export const workspaceTools = [
   {
     name: "sandbox_browser",
     description:
-      "Control the user's existing local Chrome through d3k. agent-browser arguments, e.g. [snapshot,-i], [fill,@e2,text], [click,@e3]. For loading metrics use [metrics,https://example.com/,--new-tab]: Web Vitals, navigation timing, long tasks and resource summaries as JSON. Omit URL to inspect current page without reload (CLS/long tasks unavailable). Prefer metrics over custom eval scripts. CDP is already connected.",
+      "Control the user's existing local Chrome through d3k. agent-browser arguments, e.g. [snapshot,-i], [fill,@e2,text], [click,@e3]. Loading metrics: [metrics,URL,--new-tab]. For requested page/UI changes or loading/jank investigations, capture BEFORE edits with [capture,URL,--output,/absolute/new-before-dir], repeat after edits into another directory, then [compare,/absolute/new-before-dir,/absolute/new-after-dir,--output,/absolute/report.html]. Optional capture flags: --ready CSS, --actions JSON (click/scroll/waitFor), --runs 1..5, --settle-ms 250..5000. Export paths are on the LOCAL laptop, not the remote repo. Videos and metrics are explicit local lab evidence, not field Web Vitals. CDP is already connected.",
     inputSchema: {
       type: "object",
       properties: { args: { type: "array", items: { type: "string" } } },

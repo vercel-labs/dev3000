@@ -74,6 +74,30 @@ describe("sandbox shutdown", () => {
     expect(options.log).toHaveBeenCalledWith("Could not remove the sandbox fx browser context")
   })
 
+  it("does not re-expose the app on a legacy route if stopping attached compute's runtime fails", async () => {
+    const { sandbox, options } = fixture()
+    sandbox.runCommand.mockImplementation(async (args) => {
+      if ((args as { args: string[] }).args.includes("stop")) throw new Error("timed out")
+      return { exitCode: 0 }
+    })
+    await closeSandboxResources({ ...options, ownsSandbox: false, originalPorts: [3000, 9223] })
+    expect(sandbox.stop).not.toHaveBeenCalled()
+    expect(sandbox.update).not.toHaveBeenCalled()
+    expect(options.log).toHaveBeenCalledWith(expect.stringContaining("keeping the app port private"))
+  })
+
+  it("waits for the app listener after a stop acknowledgement before restoring a public legacy route", async () => {
+    const { sandbox, options } = fixture()
+    sandbox.runCommand.mockImplementation(async (args) => ({
+      exitCode: (args as { args: string[] }).args[0] === "-e" ? 1 : 0
+    }))
+    await closeSandboxResources({ ...options, ownsSandbox: false, originalPorts: [3000] })
+    expect(sandbox.runCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ cmd: "node", args: expect.arrayContaining(["-e"]) })
+    )
+    expect(sandbox.update).not.toHaveBeenCalled()
+  })
+
   it("reports a failed compute stop and still finishes local cleanup", async () => {
     const { sandbox, options } = fixture()
     sandbox.stop.mockRejectedValue(new Error("stop failed"))
