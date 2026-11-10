@@ -3,10 +3,67 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { startWorkspaceBroker } from "./sandbox-workspace.js"
+import { runWorkspaceClient } from "./workspace-client.js"
 
 describe("workspace stdio transport", () => {
+  it("returns a long capture result while keeping ordinary request deadlines bounded", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "d3k-workspace-capture-"))
+    const config = join(directory, "connection.json")
+    writeFileSync(config, JSON.stringify({ url: "http://127.0.0.1:1234/call", token: "test" }))
+    vi.useFakeTimers()
+    vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+      const controller = new AbortController()
+      setTimeout(() => controller.abort(new Error("Request timed out")), ms)
+      return controller.signal
+    })
+    let responseDelay = 75000
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url, options: RequestInit) =>
+          new Promise<Response>((resolve, reject) => {
+            const timer = setTimeout(
+              () => resolve(Response.json({ content: [{ type: "text", text: "recorded" }] })),
+              responseDelay
+            )
+            options.signal?.addEventListener("abort", () => {
+              clearTimeout(timer)
+              reject(options.signal?.reason)
+            })
+          })
+      )
+    )
+    const output = vi.spyOn(process.stdout, "write").mockReturnValue(true)
+    try {
+      const capture = runWorkspaceClient(config, [
+        "sandbox_browser",
+        JSON.stringify({ args: ["capture", "https://example.com"] })
+      ])
+      await vi.advanceTimersByTimeAsync(75000)
+      await capture
+      expect(output).toHaveBeenCalledWith(`${JSON.stringify({ content: [{ type: "text", text: "recorded" }] })}\n`)
+      const ordinary = expect(runWorkspaceClient(config, ["sandbox_exec", '{"command":"pwd"}'])).rejects.toThrow(
+        "Request timed out"
+      )
+      await vi.advanceTimersByTimeAsync(70000)
+      await ordinary
+      responseDelay = 650000
+      const overlong = expect(runWorkspaceClient(config, ["sandbox_browser", '{"args":["capture"]}'])).rejects.toThrow(
+        "Request timed out"
+      )
+      await vi.advanceTimersByTimeAsync(600000)
+      await overlong
+    } finally {
+      vi.clearAllTimers()
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+      vi.useRealTimers()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it("supports MCP discovery and large stdin JSON without shell argument transport", async () => {
     const directory = mkdtempSync(join(tmpdir(), "d3k-workspace-client-"))
     const broker = await startWorkspaceBroker(async (_name, args) => ({
