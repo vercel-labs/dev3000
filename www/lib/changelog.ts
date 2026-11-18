@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.193",
     date: "2026-11-18",
     type: "patch",
-    highlights: [
-      "Support private package installs and larger sandbox workspaces (#127)"
-    ]
+    highlights: ["Support private package installs and larger sandbox workspaces (#127)"]
   },
 
   {
