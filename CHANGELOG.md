@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.193] - 2026-11-18
+
+**Patch Release**
+
+- Support private package installs and larger sandbox workspaces (#127)
+
 ## [0.0.192] - 2026-11-10
 
 **Feature Release**
