@@ -18,6 +18,8 @@ export interface SandboxSession {
   branch?: string
   command?: string
   installCommand?: string
+  managedNpm?: boolean
+  vcpus?: string
   timeout: string
   harness?: Harness
   harnessLocation?: HarnessLocation
@@ -58,6 +60,12 @@ function validSession(value: unknown): value is SandboxSession {
       record.lastUsedAt
     ].every((value) => typeof value === "string" && !!value) &&
     typeof record.fx === "boolean" &&
+    (record.managedNpm === undefined || typeof record.managedNpm === "boolean") &&
+    (record.vcpus === undefined ||
+      (typeof record.vcpus === "string" &&
+        Number.isInteger(Number(record.vcpus)) &&
+        Number(record.vcpus) >= 1 &&
+        Number(record.vcpus) <= 32)) &&
     (record.fxWorkspace === undefined ||
       (typeof record.fxWorkspace === "string" &&
         isAbsolute(record.fxWorkspace) &&

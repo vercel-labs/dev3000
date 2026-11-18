@@ -40,7 +40,8 @@ const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const [mode, marker, seed] = process.argv.slice(1);
 const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {encoding:'utf8'}).trim();
-const files = [...new Set(execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {cwd:root, encoding:'utf8'}).split('\\0').filter(Boolean))].sort();
+const manifests = ['package.json', 'bun.lock', 'bun.lockb', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'bunfig.toml', '.npmrc', '.yarnrc.yml'];
+const files = [...new Set(execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...manifests.map(name => ':(glob)**/' + name)], {cwd:root, encoding:'utf8'}).split('\\0').filter(Boolean))].sort();
 const hash = createHash('sha256').update(seed).update(process.version).update(process.arch).update(process.platform);
 for (const name of files) {
   if (!/^(package.json|bun.lockb?|package-lock.json|npm-shrinkwrap.json|yarn.lock|pnpm-lock.yaml|pnpm-workspace.yaml|bunfig.toml|.npmrc|.yarnrc.yml)$/.test(path.basename(name))) continue;

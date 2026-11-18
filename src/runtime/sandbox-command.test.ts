@@ -22,6 +22,15 @@ describe("sandbox project selection", () => {
     expect(() => resolveSandboxOptions({ project: "team/project", scope: "other" })).toThrow("conflicts")
     expect(() => resolveSandboxOptions({ project: "project", timeout: "NaN" })).toThrow("timeout")
     expect(() => resolveSandboxOptions({ project: "project", attach: "existing", branch: "main" })).toThrow("--attach")
+    expect(() => resolveSandboxOptions({ project: "project", attach: "existing", managedNpm: true })).toThrow(
+      "--managed-npm must be provisioned"
+    )
+  })
+
+  it("accepts a larger sandbox and rejects invalid CPU counts before provisioning", () => {
+    expect(resolveSandboxOptions({ project: "team/project", vcpus: "16" }).vcpus).toBe("16")
+    for (const vcpus of ["0", "1.5", "NaN", "33"])
+      expect(() => resolveSandboxOptions({ project: "team/project", vcpus })).toThrow("--vcpus")
   })
 
   it("accepts a stable hostname and rejects names outside one lowercase DNS label", () => {
@@ -72,12 +81,12 @@ describe("sandbox project selection", () => {
       command: "bun run dev"
     })
     await program.parseAsync(
-      [...prefix, "--project", "elsigh-pro/cranio-mom", "--no-shell", "--no-fx", "--timeout", "15"],
+      [...prefix, "--project", "elsigh-pro/cranio-mom", "--no-shell", "--no-fx", "--timeout", "15", "--managed-npm"],
       {
         from: "user"
       }
     )
-    expect(result).toMatchObject({ shell: false, fx: false, timeout: "15" })
+    expect(result).toMatchObject({ shell: false, fx: false, timeout: "15", managedNpm: true })
   })
 
   it("accepts the explicit remote location and rejects arbitrary locations", () => {

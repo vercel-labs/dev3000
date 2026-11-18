@@ -28,6 +28,7 @@ import {
 import { closeSandboxResources } from "./sandbox-cleanup.js"
 import { DEFAULT_SANDBOX_TIMEOUT_MINUTES } from "./sandbox-command.js"
 import { sandboxFxContext } from "./sandbox-context.js"
+import { sandboxDevelopmentEnv } from "./sandbox-env.js"
 import { discoverLegacyFxWorkspace } from "./sandbox-fx-resume.js"
 import { createSandboxGateway } from "./sandbox-gateway.js"
 import { sandboxGitCredentials } from "./sandbox-git.js"
@@ -65,6 +66,8 @@ export interface SandboxOptions {
   region?: string
   command?: string
   installCommand?: string
+  managedNpm?: boolean
+  vcpus?: string
   shell?: boolean
   headless?: boolean
   preview?: boolean
@@ -185,6 +188,8 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
     ) as Project
     if (!project.id || !project.accountId || !project.name) throw new Error("Vercel returned an invalid project")
     sandboxWorkdir(project.rootDirectory)
+    log("Checking Development environment access through Vercel CLI")
+    const appEnv = await sandboxDevelopmentEnv(project, temporary, run)
     const { token } = JSON.parse(
       await run("vercel", ["project", "token", project.id, "--scope", project.accountId, "--format", "json"], {
         cwd: temporary
@@ -197,7 +202,10 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
       // Read configured routes before resuming: resume responses may also contain reserved system ports.
       // The first command below resumes compute automatically after user ports have been configured.
       sandbox = await Sandbox.get({ ...credentials, name: options.attach, signal: shellAbort.signal })
-      await sandbox.update({ timeout: timeoutMinutes * 60000 })
+      await sandbox.update({
+        timeout: timeoutMinutes * 60000,
+        ...(options.vcpus ? { resources: { vcpus: Number(options.vcpus) } } : {})
+      })
       const ports = sandbox.routes.map((route) => route.port)
       const exposedPorts = sandboxExposedPorts(ports)
       if (ports.length !== exposedPorts.length || exposedPorts.some((port) => !ports.includes(port))) {
@@ -211,12 +219,15 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
       const managedGit = await sandboxGitCredentials(project, run)
       log(
         managedGit.__source_credentials
-          ? "Cloning the linked repository with Vercel managed Git (6 vCPUs required by the current platform workaround)"
+          ? `Cloning the linked repository with Vercel managed Git (${options.vcpus || 6} vCPUs)`
           : "Creating a sandbox and cloning the linked repository remotely (public access)"
       )
       sandbox = await Sandbox.create({
         ...credentials,
         ...managedGit,
+        ...(options.vcpus ? { resources: { vcpus: Number(options.vcpus) } } : {}),
+        // SDK 3.x forwards private parameters; the API manages credentials outside the VM.
+        ...(options.managedNpm ? { __credentials: { npm: true } } : {}),
         signal: shellAbort.signal,
         ...(options.name ? { name: options.name } : {}),
         ...(options.region ? { region: options.region as SandboxRegion } : {}),
@@ -229,7 +240,7 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
         }
       }).catch((error: unknown) => {
         throw new Error(
-          `Could not create the sandbox from ${repository}${options.branch ? ` at ${options.branch}` : ""}: ${error instanceof Error ? error.message : "Unknown creation error"}. ${managedGit.__source_credentials ? "Check the project's managed Git flags, repository authorization, GitHub App installation, requested revision, and effective limits for the required 6-vCPU cold allocation. Managed Git failures are not retried with laptop credentials." : "Private repositories require Vercel managed Git onboarding: enable the project's Sandbox Git credentials and signed-commits flags and authorize the linked repository with a git:write Bound. Alternatively, attach an already provisioned sandbox with --attach <name>."} No existing checkout was reused.`,
+          `Could not create the sandbox from ${repository}${options.branch ? ` at ${options.branch}` : ""}: ${error instanceof Error ? error.message : "Unknown creation error"}. ${managedGit.__source_credentials ? "Check the project's managed Git flags, repository authorization, GitHub App installation, requested revision, and effective limits for the requested resource allocation. Managed Git failures are not retried with laptop credentials." : "Private repositories require Vercel managed Git onboarding: enable the project's Sandbox Git credentials and signed-commits flags and authorize the linked repository with a git:write Bound. Alternatively, attach an already provisioned sandbox with --attach <name>."} No existing checkout was reused.`,
           { cause: error }
         )
       })
@@ -358,6 +369,8 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
       branch: branchResult.exitCode === 0 ? (await branchResult.stdout()).trim() || undefined : undefined,
       command: options.command || project.devCommand || undefined,
       installCommand: options.installCommand,
+      managedNpm: options.managedNpm,
+      vcpus: options.vcpus,
       timeout: String(timeoutMinutes),
       fx: options.fx !== false,
       gateway: options.gateway !== false,
@@ -373,23 +386,6 @@ export async function launchSandbox(options: SandboxOptions, lifecycle: SandboxL
     }
     if (localHarness && options.harness === "fx") savedSession.fxWorkspace = sandboxFxWorkspace(savedSession)
     saveSandboxSession(savedSession)
-    log("Loading Development environment through Vercel CLI")
-    // Use the same resolved Development-env endpoint as `vercel env pull`,
-    // keeping the values in memory rather than writing an env file on the laptop.
-    const development = JSON.parse(
-      await run("vercel", ["api", `/v3/env/pull/${project.id}/development`, "--scope", project.accountId, "--raw"], {
-        cwd: temporary
-      })
-    ) as { env?: Record<string, string> }
-    if (!development.env || typeof development.env !== "object")
-      throw new Error("Could not load Development environment")
-    const appEnv: Record<string, string> = Object.fromEntries(
-      Object.entries(development.env).filter((entry): entry is [string, string] => typeof entry[1] === "string")
-    )
-    // A development OIDC token manages infrastructure; it does not belong in app/agent environment.
-    delete appEnv.VERCEL_OIDC_TOKEN
-    delete appEnv.VERCEL_TOKEN
-    delete appEnv.VERCEL_AUTH_TOKEN
     // Remove credentials from pre-hardening sessions before any repository code runs.
     const legacyCleanup = await sandbox.runCommand({
       cmd: "rm",

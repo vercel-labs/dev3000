@@ -23,6 +23,19 @@ afterEach(() => {
 })
 
 describe("sandbox setup reuse", () => {
+  it("handles monorepos whose unrelated tracked paths exceed the child-process output limit", () => {
+    const { root, run } = fixture()
+    const blob = execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: root, input: "source" }).toString().trim()
+    const index = Array.from(
+      { length: 6000 },
+      (_, i) => `100644 ${blob}\tsrc/${"x".repeat(180)}${i}/component.ts\n`
+    ).join("")
+    expect(Buffer.byteLength(index)).toBeGreaterThan(1024 * 1024)
+    execFileSync("git", ["update-index", "--index-info"], { cwd: root, input: index })
+    expect(run("save").status).toBe(0)
+    expect(run("check").status).toBe(0)
+  })
+
   it("resolves the install plan through the remote process entry point", () => {
     const { root } = fixture()
     writeFileSync(join(root, "package.json"), '{"packageManager":"npm@11.6.2"}')

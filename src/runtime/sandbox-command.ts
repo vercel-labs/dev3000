@@ -28,12 +28,14 @@ export function addSandboxProjectOptions(command: Command): Command {
     .option("--attach <name>", "Use an existing sandbox with its repository already provisioned")
     .option("--hostname <name>", "Stable local app name, e.g. songbook for songbook.d3k.localhost")
     .option("--region <region>", "Vercel Sandbox region")
+    .option("--vcpus <count>", "Sandbox CPU count (2 GiB memory per vCPU; applies on the next session)")
     .option("--timeout <minutes>", "Sandbox compute and Gateway key lifetime", String(DEFAULT_SANDBOX_TIMEOUT_MINUTES))
     .option(
       "--install-command <command>",
       "Remote dependency install command (otherwise project setting or detected package manager)"
     )
     .option("--no-shell", "Keep the companion running without opening an interactive remote shell")
+    .option("--managed-npm", "Use the Vercel team's managed private npm credentials (new sandboxes only)")
     .option("--no-fx", "Skip fx installation")
     .option("--no-gateway", "Skip automatic session Gateway credentials for sandbox fx")
     .option("--gateway-budget <usd|none>", "Gateway spending limit (Eve defaults to none; fx defaults to 5 USD)")
@@ -58,6 +60,11 @@ export function resolveSandboxOptions(options: SandboxOptions): SandboxOptions {
   if (parts.length === 2 && options.scope && options.scope !== parts[0])
     throw new Error("The team in --project conflicts with --scope; use one team selector")
   const minutes = Number(options.timeout ?? DEFAULT_SANDBOX_TIMEOUT_MINUTES)
+  if (
+    options.vcpus !== undefined &&
+    (!Number.isInteger(Number(options.vcpus)) || Number(options.vcpus) < 1 || Number(options.vcpus) > 32)
+  )
+    throw new Error("--vcpus must be an integer from 1 to 32; effective team limits also apply")
   if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440)
     throw new Error("Sandbox timeout must be 1–1440 minutes")
   const gatewayBudget = options.gatewayBudget ?? (options.harness === "eve" ? undefined : "5")
@@ -69,6 +76,8 @@ export function resolveSandboxOptions(options: SandboxOptions): SandboxOptions {
     throw new Error("--gateway-budget must be at least 1 USD or none")
   if (options.attach && (options.branch || options.name))
     throw new Error("--attach uses the existing checkout; omit --branch and --name")
+  if (options.attach && options.managedNpm && !options.resume)
+    throw new Error("--managed-npm must be provisioned when creating the sandbox; omit --attach")
   return {
     ...options,
     gatewayBudget,
@@ -94,6 +103,8 @@ export function resolveSandboxResume(options: Partial<SandboxOptions>): SandboxO
   for (const option of ["project", "scope", "attach", "branch", "name", "region"] as const)
     if (options[option] !== undefined) throw new Error(`--resume <id> restores ${option}; omit --${option}`)
   const record = readSandboxSession(options.resume)
+  if (options.managedNpm && !record.managedNpm)
+    throw new Error("This sandbox was created without managed npm credentials; create a new sandbox with --managed-npm")
   if (sandboxLauncherAlive(record))
     throw new Error("This sandbox session still has a running companion; stop it before resuming")
   return resolveSandboxOptions({
@@ -103,6 +114,8 @@ export function resolveSandboxResume(options: Partial<SandboxOptions>): SandboxO
     hostname: record.hostname,
     command: record.command,
     installCommand: record.installCommand,
+    managedNpm: record.managedNpm,
+    vcpus: record.vcpus,
     timeout: record.timeout,
     fx: record.fx,
     harness: options.shell === false && options.harness === undefined ? undefined : record.harness,
