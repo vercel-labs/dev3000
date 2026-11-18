@@ -47,6 +47,13 @@ export const desktopTools = [
         },
         command: { type: "string", description: "Remote dev command override." },
         installCommand: { type: "string", description: "Remote dependency install command override." },
+        managedNpm: { type: "boolean", const: true, description: "Use team managed npm credentials in a new sandbox." },
+        vcpus: {
+          type: "integer",
+          minimum: 1,
+          maximum: 32,
+          description: "CPU count; 2 GiB memory per vCPU. Applies on the next compute session."
+        },
         headless: { type: "boolean" },
         browser: {
           type: "string",
@@ -99,6 +106,8 @@ function startOptions(args: Record<string, unknown>): SandboxOptions {
     "timeout",
     "command",
     "installCommand",
+    "managedNpm",
+    "vcpus",
     "headless",
     "browser"
   ])
@@ -106,6 +115,11 @@ function startOptions(args: Record<string, unknown>): SandboxOptions {
     if (!allowed.has(key)) throw new Error(`Unknown sandbox_start option: ${key}`)
     if (key === "browser") {
       if (value !== "local" && value !== "link") throw new Error("browser must be local or link")
+    } else if (key === "managedNpm") {
+      if (value !== true) throw new Error("managedNpm must be true when specified")
+    } else if (key === "vcpus") {
+      if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 32)
+        throw new Error("vcpus must be an integer from 1 to 32")
     } else if (key === "headless") {
       if (typeof value !== "boolean") throw new Error("headless must be a boolean")
     } else if (key === "timeout") {
@@ -119,6 +133,7 @@ function startOptions(args: Record<string, unknown>): SandboxOptions {
     ...launchArgs,
     ...(browser === "link" ? { preview: true, headless: true } : {}),
     ...(args.timeout === undefined ? {} : { timeout: String(args.timeout) }),
+    ...(args.vcpus === undefined ? {} : { vcpus: String(args.vcpus) }),
     // Overrides saved terminal preferences on resume; desktop supplies its own model.
     shell: false,
     fx: false,

@@ -70,13 +70,17 @@ describe("desktop sandbox lifecycle", () => {
     })
     const workspace = createDesktopWorkspace({ launch, list: () => [record], portless })
     try {
-      expect((await read(workspace, "sandbox_start", { project: "team/test" })).phase).toBe("starting")
+      expect(
+        (await read(workspace, "sandbox_start", { project: "team/test", managedNpm: true, vcpus: 16 })).phase
+      ).toBe("starting")
       expect(launch.mock.calls[0][0]).toMatchObject({
         project: "test",
         scope: "team",
         fx: false,
         shell: false,
-        gateway: false
+        gateway: false,
+        managedNpm: true,
+        vcpus: "16"
       })
       expect((await read(workspace)).progress).toContain("Installing dependencies")
       await expect(workspace.call("sandbox_read_file", { path: "page.tsx" })).rejects.toThrow("No ready")
