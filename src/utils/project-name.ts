@@ -98,15 +98,18 @@ export function getProjectName(cwd: string = process.cwd()): string {
   // Always add a path hash to ensure uniqueness across different directories
   // that might have the same package.json name or directory name
   const pathHash = createHash("sha256").update(cwd).digest("hex").substring(0, 6)
-  projectName = `${projectName}-${pathHash}`
 
   // Sanitize the project name (replace special chars, limit length)
-  return projectName
+  // Truncate before appending the hash so long names keep their path hash
+  const baseName = projectName
     .toLowerCase()
     .replace(/[^a-zA-Z0-9-_]/g, "-") // Replace special chars with hyphens
     .replace(/-+/g, "-") // Collapse multiple hyphens
     .replace(/^-|-$/g, "") // Remove leading/trailing hyphens
-    .substring(0, 50) // Limit length
+    .substring(0, 50 - pathHash.length - 1) // Limit length
+    .replace(/-$/, "") // Remove trailing hyphen left by truncation
+
+  return baseName ? `${baseName}-${pathHash}` : pathHash
 }
 
 /**
